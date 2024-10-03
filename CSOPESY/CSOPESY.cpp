@@ -179,7 +179,7 @@ private:
 	}
 
 
-	string nvidiaPrint(const string& str, size_t width) {
+	string smiPrint(const string& str, size_t width) {
 		cout << setw(width);
 		if (str.length() > width) {
 			if (str.length() > 8) {
@@ -188,7 +188,7 @@ private:
 			else {
 				return "." + str.substr(str.length() - (width - 1));
 			}
-		} 
+		}
 		return str;
 	}
 
@@ -204,6 +204,8 @@ private:
 			string type;
 			string processName;
 			string gpuMemory;
+
+
 			process(string gpu, string gi, string ci, string pid, string type, string processName, string gpuMemory) {
 				this->gpu = gpu;
 				this->gi = gi;
@@ -221,16 +223,16 @@ private:
 		processList.emplace_back("0", "N/A", "N/A", "4800", "C+G", "C:\\Windows\\explorer.exe", "N/A");
 		processList.emplace_back("0", "N/A", "N/A", "15276", "C+G", "C:\\Users\\user\\AppData\\Local\\Discord\\app-1.0.9002\\Discord.exe", "N/A");
 		processList.emplace_back("0", "N/A", "N/A", "6224", "C+G", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "N/A");
-		processList.emplace_back("0", "N/A", "N/A", "20280", "C+G", "C:\\Users\\user\\AppData\\Roaming\S\potify\\Spotify.exe", "N/A");
+		processList.emplace_back("0", "N/A", "N/A", "20280", "C+G", "C:\\Users\\user\\AppData\\Roaming\\Spotify\\Spotify.exe", "N/A");
 		processList.emplace_back("0", "N/A", "N/A", "23148", "C+G", "E:\\Telegram Desktop\\Telegram.exe", "N/A");
-	
-	
-			
+
+
+
 
 		// print process
 		auto printProcess = [&](process p) {
-			cout << "| " << right << nvidiaPrint(p.gpu, 4) << left << nvidiaPrint("",3) << nvidiaPrint(p.gi,3) << nvidiaPrint("", 2) << nvidiaPrint(p.ci, 5) << nvidiaPrint("",2) << right << nvidiaPrint(p.pid,6) << nvidiaPrint("",2) << nvidiaPrint(p.type,5) << left << nvidiaPrint("",3) << nvidiaPrint(p.processName, 38) << nvidiaPrint("", 4) << nvidiaPrint(p.gpuMemory, 8) << " |" << endl;
-		};
+			cout << "| " << right << smiPrint(p.gpu, 4) << left << smiPrint("", 3) << smiPrint(p.gi, 3) << smiPrint("", 2) << smiPrint(p.ci, 5) << smiPrint("", 2) << right << smiPrint(p.pid, 6) << smiPrint("", 2) << smiPrint(p.type, 5) << left << smiPrint("", 3) << smiPrint(p.processName, 38) << smiPrint("", 4) << smiPrint(p.gpuMemory, 8) << " |" << endl;
+			};
 
 		// get current time
 		time_t now = time(nullptr);
@@ -260,22 +262,22 @@ private:
 
 		// print part 1
 		cout << "+---------------------------------------------------------------------------------------+" << endl;
-		cout << "| " << left << "NVIDIA-SMI " <<  nvidiaPrint(nvidiaVersion,22)  << " Driver Version: "  << nvidiaPrint(driverVersion,12) <<  " CUDA Version: "  << nvidiaPrint(cudaVersion,8) << " |" << endl;
+		cout << "| " << left << smiPrint("NVIDIA-SMI", 11) << smiPrint(nvidiaVersion, 23) << smiPrint("Driver Version:", 16) << smiPrint(driverVersion, 13) << smiPrint("CUDA Version:", 14) << smiPrint(cudaVersion, 8) << " |" << endl;
 		cout << "|-----------------------------------------+----------------------+----------------------|" << endl;
-		cout << "| " << right << setw(3) << "GPU" << nvidiaPrint("",2) << left << nvidiaPrint("Name", 25) << nvidiaPrint("TCC/WDDM", 9) << " | " << nvidiaPrint("Bus-Id", 14) << nvidiaPrint("Disp.A", 6) << " | " << right << setw(20) << "Volatile Uncorr. ECC" << " |" << endl;
-		cout << "| " << left << nvidiaPrint("Fan", 5)  << nvidiaPrint("Temp", 7) << nvidiaPrint("Perf", 14) << nvidiaPrint("pwr:Usage/Cap", 13)  << " | " << right << nvidiaPrint("Memory-Usage", 20) << " | " << nvidiaPrint("GPU-Util", 8) << right << setw(12) << "Compute M." << " |" << endl;
-		cout << "| " << right << setw(39) << "" << " | " << setw(20) << "" << " | " << setw(20) << "MIG M." << " |" << endl;
+		cout << "| " << right << smiPrint("GPU", 3) << smiPrint("", 2) << left << smiPrint("Name", 25) << smiPrint("TCC/WDDM", 9) << " | " << smiPrint("Bus-Id", 14) << smiPrint("Disp.A", 6) << " | " << right << smiPrint("Volatile Uncorr. ECC", 20) << " |" << endl;
+		cout << "| " << left << smiPrint("Fan", 5) << smiPrint("Temp", 7) << smiPrint("Perf", 14) << smiPrint("pwr:Usage/Cap", 13) << " | " << right << smiPrint("Memory-Usage", 20) << " | " << smiPrint("GPU-Util", 8) << smiPrint("Compute M.", 12) << " |" << endl;
+		cout << "| " << smiPrint("", 39) << " | " << smiPrint("", 20) << " | " << smiPrint("MIG M.", 20) << " |" << endl;
 		cout << "|=========================================+======================+======================|" << endl;
-		cout << "| " << right << nvidiaPrint(gpuValue, 3) << setw(2) << "" << left << nvidiaPrint(gpuName, 29) << nvidiaPrint(gpuGraphic, 4) << setw(1) << "" << " | " << nvidiaPrint(gpuBusId, 18) << nvidiaPrint(dispA, 2) << " | " << right << nvidiaPrint(volatileUncorr, 20) << " |" << endl;
-		cout << "| " << left << nvidiaPrint(fan, 4) << setw(2) << "" << nvidiaPrint(temp, 6) << setw(1) << "" << nvidiaPrint(perf, 16) << nvidiaPrint(pwr, 10) << " | " << right << nvidiaPrint(memoryUsage,20) << " | " << right << nvidiaPrint(gpuUtil,7) << nvidiaPrint(compute, 13) << " |" << endl;
-		cout << "| " << right << setw(39) << "" << " | " << setw(20) << "" << " | " << nvidiaPrint(mig, 20) << " |" << endl;	
+		cout << "| " << smiPrint(gpuValue, 3) << smiPrint("", 2) << left << smiPrint(gpuName, 29) << smiPrint(gpuGraphic, 4) << smiPrint("", 1) << " | " << smiPrint(gpuBusId, 18) << smiPrint(dispA, 2) << " | " << right << smiPrint(volatileUncorr, 20) << " |" << endl;
+		cout << "| " << left << smiPrint(fan, 4) << smiPrint("", 2) << smiPrint(temp, 6) << smiPrint("", 1) << smiPrint(perf, 16) << smiPrint(pwr, 10) << " | " << right << smiPrint(memoryUsage, 20) << " | " << smiPrint(gpuUtil, 7) << smiPrint(compute, 13) << " |" << endl;
+		cout << "| " << smiPrint("", 39) << " | " << smiPrint("", 20) << " | " << smiPrint(mig, 20) << " |" << endl;
 		cout << "+-----------------------------------------+----------------------+----------------------+" << endl << endl;
 
 		// print part 2
 		cout << "+---------------------------------------------------------------------------------------+" << endl;
-		cout << "| " << left << nvidiaPrint("Processes: ",85) << " |" << endl;
-		cout << "| " << right << nvidiaPrint("GPU", 4) << left << nvidiaPrint("", 3) << nvidiaPrint("GI",5) << nvidiaPrint("CI",6) << nvidiaPrint("",2) << right << setw(5) << "PID" << left << nvidiaPrint("",3) << nvidiaPrint("Type",4) << nvidiaPrint("",3) << nvidiaPrint("Process name",38) << nvidiaPrint("",2) << nvidiaPrint("GPU Memory",10) << " |"  << endl;
-		cout << "| " << left << nvidiaPrint("", 7) << nvidiaPrint("ID", 5) << nvidiaPrint("ID", 63) << nvidiaPrint("Usage",10) << nvidiaPrint(" |", 2) << endl;
+		cout << "| " << left << smiPrint("Processes: ", 85) << " |" << endl;
+		cout << "| " << right << smiPrint("GPU", 4) << left << smiPrint("", 3) << smiPrint("GI", 5) << smiPrint("CI", 6) << smiPrint("", 2) << right << smiPrint("PID", 5) << left << smiPrint("", 3) << smiPrint("Type", 4) << smiPrint("", 3) << smiPrint("Process name", 38) << smiPrint("", 2) << smiPrint("GPU Memory", 10) << " |" << endl;
+		cout << "| " << smiPrint("", 7) << smiPrint("ID", 5) << smiPrint("ID", 63) << smiPrint("Usage", 10) << smiPrint(" |", 2) << endl;
 		cout << "|=======================================================================================|" << endl;
 		for (const auto p : processList) {
 			printProcess(p);
@@ -284,7 +286,7 @@ private:
 	}
 
 	bool mainMenuCommand(vector<string> seperatedCommand, string command_to_check) {
-		const set<string> commands = { "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit","nvidia-smi"};
+		const set<string> commands = { "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit","nvidia-smi" };
 
 		if (!commands.count(seperatedCommand[0])) {
 			commandNotRecognize(command_to_check);
