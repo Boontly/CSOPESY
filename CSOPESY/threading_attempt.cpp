@@ -71,6 +71,7 @@ public:
 };
 
 class Screen : public abstract_screen {
+	
 private:
 	string processName;
 	int currentLine;
@@ -147,8 +148,8 @@ public:
 		return statements;
 	}
 
-	void setStatements(vector<string> statement_arr){
-		statements = statement_arr;
+	void setStatements(const vector<string>& statement_arr) {
+    	statements = statement_arr;
 	}
 
 	bool operator<(const Screen& other) const {
@@ -169,6 +170,20 @@ public:
 			write("| " + line + string(width - line.length() - 4, ' ') + " |");
 		}
 		write("+" + string(width - 2, '-') + "+");
+	}
+
+	void writeNotOpenScreen() {
+		string content = printScreen_helper().str();
+		int width = content.length() + 4;
+
+		public_write("+" + string(width - 2, '-') + "+");
+
+		stringstream contentStream(content);
+		string line;
+		while (getline(contentStream, line)) {
+			public_write("| " + line + string(width - line.length() - 4, ' ') + " |");
+		}
+		public_write("+" + string(width - 2, '-') + "+");
 	}
 
 	boolean screenCommand(vector<string> seperatedCommand, string command_to_check) {
@@ -201,24 +216,22 @@ public:
     CpuWorker(int worker_id) : id(worker_id) {}
 
     // Method to process the screen
-    void processScreen(Screen screen) {
-        string filename = "dog_" + screen.getProcessName();
-        vector<string> commands_to_be_printed = screen.getStatements();
-
+    void processScreen(shared_ptr<Screen> screen) {
+        string filename = "dog_" + screen->getProcessName();
+        vector<string> commands_to_be_printed = screen->getStatements();
         // Open the file to append the print command information
         ofstream outFile(filename, ios::app);
         if (outFile.is_open()) {
             // Get current time
             time_t now = time(nullptr);
-            
+
             // Format and write the current timestamp and core ID to the file
-            ostringstream oss;
-            oss << "Timestamp: " << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << " | Core: " << id << " | Commands: ";
-            screen.public_write(oss.str());
 
             // Write each command to the file
             for (const auto& command : commands_to_be_printed) {
-                outFile << command << "; "; // Separate commands with a semicolon
+            	ostringstream oss;
+				oss << "(" << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << ") | Core: " << id << " | \"" << command << "\"\n";
+            	outFile << oss.str();
             }
 
             outFile << endl; // End the line after all commands are written
@@ -229,10 +242,11 @@ public:
     }
 };
 
+
 class Scheduler {
 public:
     int num_threads = 4;
-    queue<Screen> screen_queue; // Queue for process
+    queue<shared_ptr<Screen>> screen_queue;
     vector<CpuWorker> workers;
     vector<thread> workerThreads; // Store worker threads
     mutex queue_mutex; 
@@ -251,8 +265,6 @@ public:
             try {
                 workerThreads.emplace_back([this, &worker]() {
                     while (true) {
-                        Screen screen(""); // Default initialization
-
                         unique_lock<mutex> lock(queue_mutex);
                         cv.wait(lock, [this] { 
                             return stop || !screen_queue.empty(); 
@@ -260,9 +272,8 @@ public:
 
                         if (stop && screen_queue.empty()) return; // Exit if stop signal received and no tasks left
 
-                        screen = screen_queue.front(); // Retrieve the next task
+                        shared_ptr<Screen> screen = screen_queue.front(); // Retrieve the next task
                         screen_queue.pop(); // Remove the task from the queue
-
                         // Process the screen content
                         worker.processScreen(screen);
                     }
@@ -292,13 +303,14 @@ public:
         stopAll();
     }
 
-    void enqueue(const Screen& screen) {
-        {
-            lock_guard<mutex> lock(queue_mutex);
-            screen_queue.push(screen); // Add a new screen task
-        }
-        cv.notify_one(); // Notify one worker thread
+    void enqueue(const shared_ptr<Screen>& screen) {
+    {
+        lock_guard<mutex> lock(queue_mutex);
+        screen_queue.push(screen); // Add a new screen task
     }
+    cv.notify_one(); // Notify one worker thread
+}
+
 };
 
 
@@ -310,37 +322,27 @@ private:
 	map<string, Screen> screensAvailable;
 
 	void dummy_screens() {
-		set<string> dups; // To track duplicate names
 		for (int i = 0; i < 10; i++) {
 			string name = generateRandomName();
-			// Ensure unique name
-			while (dups.count(name)) {
+			while (screensAvailable.count(name)) {
 				name = generateRandomName();
 			}
-			dups.insert(name);
 
-			// Create a new Screen object with a unique name
-			Screen screen(name); 
+			auto screen = make_shared<Screen>(name);
+			screensAvailable[name] = *screen;
+			screensAvailable[name].writeNotOpenScreen();
 
 			vector<string> process_lister;
-			for (int j = 0; j < 100; j++) { // Generate 100 random statements
+			for (int j = 0; j < 100; j++) {
 				process_lister.push_back(generateRandomName());
 			}
+			screen->setStatements(process_lister);
 
-			// Set the statements to the screen
-			screen.setStatements(process_lister);
-
-			// Optionally write the commands if needed
-			/*for (const auto& x : screen.getStatements()) {
-				string temp = screen.getProcessName() + " " + x;
-				write(temp); // Assuming write function is defined elsewhere
-			}*/
-
-			// Enqueue the screen after setting statements
 			scheduler.enqueue(screen);
 		}
 		scheduler.startWorkers();
 	}
+
 
 	void commandRecognize(string command_to_check) {
 		write(command_to_check + " command recognized. Doing something.");
