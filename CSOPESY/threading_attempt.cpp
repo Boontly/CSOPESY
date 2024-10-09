@@ -13,6 +13,7 @@
 #include <map>  
 #include <queue>
 #include <thread>
+#include <atomic>
 #include <condition_variable>
 
 using namespace std;
@@ -62,7 +63,6 @@ protected:
 
 public:
 	virtual void redraw() {
-		system("cls");
 		lock_guard<mutex> lock(console_mutex);
 		for (const auto& entry : buffer) {
 			SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), entry.color);
@@ -84,7 +84,7 @@ private:
 	string processName;
 	int currentLine;
 	int totalLine;
-	int core_id;
+	int core_id = -1;
 	time_t timestamp;
 	bool finished = false;
 	vector<string> statements;
@@ -92,13 +92,7 @@ private:
 	stringstream printScreen_helper() {
 		stringstream ss;
 		char buffer[26];
-#ifdef _WIN32
 		ctime_s(buffer, sizeof(buffer), &timestamp);
-#else
-
-		strncpy(buffer, time_str.c_str(), sizeof(buffer) - 1);
-		buffer[sizeof(buffer) - 1] = '\0';
-#endif
 
 		ss << "Process: " << processName << "\n"
 			<< "Current Line: " << currentLine << " / " << totalLine << "\n"
@@ -202,14 +196,16 @@ public:
 		string content = printScreen_helper().str();
 		int width = content.length() + 4;
 
-		write("+" + string(width - 2, '-') + "+");
+		cout << "+" << string(width - 2, '-') << "+" << endl;
 
 		stringstream contentStream(content);
 		string line;
 		while (getline(contentStream, line)) {
-			write("| " + line + string(width - line.length() - 4, ' ') + " |");
+			cout << "| " << line << string(width - line.length() - 4, ' ') << " |" << endl;
 		}
-		write("+" + string(width - 2, '-') + "+");
+		cout << "+" << string(width - 2, '-') << "+" << endl;
+
+		redraw();
 	}
 
 	void writeNotOpenScreen() {
@@ -250,41 +246,45 @@ public:
 class CpuWorker {
 public:
     int id;           // Worker ID
-    bool stop = false; // Flag to indicate if the worker should stop
 
     // Constructor that takes a worker ID
     CpuWorker(int worker_id) : id(worker_id) {}
 
     // Method to process the screen
-    void processScreen(shared_ptr<Screen> screen) {
-        string filename =  screen->getProcessName();
-        vector<string> commands_to_be_printed = screen->getStatements();
-        // Open the file to append the print command information
-        ofstream outFile(filename, ios::app);
-        if (outFile.is_open()) {
+    void processScreen(shared_ptr<Screen> screen, atomic<bool>& running) {
+		string filename = screen->getProcessName() + ".txt";
+		vector<string> commands_to_be_printed = screen->getStatements();
+		// Open the file to append the print command information
+		ofstream outFile(filename, ios::app);
+		if (outFile.is_open()) {
 			screen->setCoreId(id);
-            // Get current time
-            time_t now = time(nullptr);
+			// Get current time
 			outFile << "Process name: " << filename << endl;
 			outFile << "Logs: " << endl << endl;
 
-            // Format and write the current timestamp and core ID to the file
+			// Write each command to the file
+			for (const auto& command : commands_to_be_printed) {
+				if (!running) break; // Check the running flag to allow for forced termination
 
-            // Write each command to the file
-            for (const auto& command : commands_to_be_printed) {
-            	ostringstream oss;
+				time_t now = time(nullptr);
+				ostringstream oss;
 				oss << "(" << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << ") | Core: " << id << " | \"" << command << "\"\n";
-            	outFile << oss.str();
+				outFile << oss.str();
 				screen->updateCurrentLine();
-				this_thread::sleep_for(chrono::milliseconds(500)); 
-            }
-            outFile << endl; // End the line after all commands are written
-			screen->setFinished();
-            outFile.close(); // Close the file after writing
-        } else {
-            cerr << "Error opening file: " << filename << endl;
-        }
-    }
+				this_thread::sleep_for(chrono::milliseconds(25)); 
+			}
+			
+			if (running) {
+				outFile << endl; // End the line after all commands are written
+				screen->setFinished();
+			}
+
+			outFile.close(); // Close the file after writing
+		} else {
+			cerr << "Error opening file: " << filename << endl;
+		}
+	}
+
 };
 
 
@@ -302,25 +302,31 @@ public:
         for (int i = 0; i < num_threads; ++i) {
             workers.emplace_back(i); // Create a new worker with its ID
         }
-        startWorkers(); // Start the worker threads after creation
     }
 
-    void startWorkers() {
+    void startWorkers(atomic<bool>& running) {
         for (auto& worker : workers) {
             try {
-                workerThreads.emplace_back([this, &worker]() {
-                    while (true) {
-                        unique_lock<mutex> lock(queue_mutex);
-                        cv.wait(lock, [this] { 
-                            return stop || !screen_queue.empty(); 
-                        }); // Wait for a task or stop signal
+                workerThreads.emplace_back([this, &worker, &running]() {
+					shared_ptr<Screen> screen;
+                    while (running) {
+						
+						if (screen == nullptr) {
+							{
+								unique_lock<mutex> lock(queue_mutex);
+								cv.wait(lock, [this] { 
+									return stop || !screen_queue.empty(); 
+								}); // Wait for a task or stop signal
 
-                        if (stop && screen_queue.empty()) return; // Exit if stop signal received and no tasks left
+								if (stop && screen_queue.empty()) return; // Exit if stop signal received and no tasks left
 
-                        shared_ptr<Screen> screen = screen_queue.front(); // Retrieve the next task
-                        screen_queue.pop(); // Remove the task from the queue
-                        // Process the screen content
-                        worker.processScreen(screen);
+								screen = screen_queue.front(); // Retrieve the next task
+								screen_queue.pop(); // Remove the task from the queue
+								// Process the screen content
+							}
+							worker.processScreen(screen, running);
+							screen = nullptr;
+						}
                     }
                 });
             } catch (const exception& e) {
@@ -349,12 +355,12 @@ public:
     }
 
     void enqueue(const shared_ptr<Screen>& screen) {
-    {
-        lock_guard<mutex> lock(queue_mutex);
-        screen_queue.push(screen); // Add a new screen task
-    }
-    cv.notify_one(); // Notify one worker thread
-}
+		{
+			lock_guard<mutex> lock(queue_mutex);
+			screen_queue.push(screen); // Add a new screen task
+		}
+		cv.notify_one(); // Notify one worker thread
+	}
 
 };
 
@@ -363,16 +369,14 @@ class MainConsole : public abstract_screen {
 private:
 	Scheduler scheduler;
 	string currentView = "MainMenu";
-	bool continue_program = true;
+	atomic<bool> continue_program = true;
+	thread scheduler_thread;
 	map<string, shared_ptr<Screen>> screensAvailable;
 
 	void dummy_screens() {
 		for (int i = 0; i < 10; i++) {
-			string name = generateRandomName();
-			while (screensAvailable.count(name)) {
-				name = generateRandomName();
-			}
-
+			string name = "screen" + to_string(i); 
+	
 			auto screen = make_shared<Screen>(name);
 			screensAvailable[name] = screen;
 			screensAvailable[name]->writeNotOpenScreen();
@@ -382,10 +386,8 @@ private:
 				process_lister.push_back(generateRandomName());
 			}
 			screen->setStatements(process_lister);
-
 			scheduler.enqueue(screen);
 		}
-		scheduler.startWorkers();
 	}
 
 
@@ -462,7 +464,7 @@ private:
 					screenNotFound();
 					return true;
 				}
-				screensAvailable[seperatedCommand[2]]->redraw();
+				screensAvailable[seperatedCommand[2]]->openScreen();
 				currentView = screensAvailable[seperatedCommand[2]]->getProcessName();
 			}
 			else if (seperatedCommand[1] == "-s") {
@@ -509,6 +511,10 @@ private:
 		string command_to_check = command;
 		transform(command_to_check.begin(), command_to_check.end(), command_to_check.begin(), ::tolower);
 
+		if (command_to_check.empty()) {
+			return true;
+		}
+
 		stringstream stream(command);
 		vector<string> seperatedCommand;
 
@@ -523,6 +529,7 @@ private:
 		else {
 			if (screensAvailable[currentView]->screenCommand(seperatedCommand, command_to_check)) {
 				currentView = "MainMenu";
+				system("cls");
 				this->redraw();
 			}
 		}
@@ -551,12 +558,14 @@ public:
 
 		continue_program = true;
 		print_header();
+		scheduler_thread = thread([this] { scheduler.startWorkers(continue_program); });
 
 		while (continue_program) {
 			cout << "Enter a command: ";
 			getline(cin, user_input);
 			continue_program = processCommand(user_input);
 		}
+		scheduler_thread.join();
 	}
 };
 
