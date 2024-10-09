@@ -194,7 +194,6 @@ public:
 
 class CpuWorker {
 public:
-    thread CpuThread; // Thread object for the worker
     int id;           // Worker ID
     bool stop = false; // Flag to indicate if the worker should stop
 
@@ -213,9 +212,9 @@ public:
             time_t now = time(nullptr);
             
             // Format and write the current timestamp and core ID to the file
-			ostringstream oss;
-			oss << "Timestamp: " << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << " | Core: " << id << " | Commands: ";
-			screen.public_write(oss.str());
+            ostringstream oss;
+            oss << "Timestamp: " << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << " | Core: " << id << " | Commands: ";
+            screen.public_write(oss.str());
 
             // Write each command to the file
             for (const auto& command : commands_to_be_printed) {
@@ -227,16 +226,15 @@ public:
         } else {
             cerr << "Error opening file: " << filename << endl;
         }
-		CpuThread.join();
     }
 };
 
 class Scheduler {
 public:
     int num_threads = 4;
-    // Queue for process
-    queue<Screen> screen_queue;
+    queue<Screen> screen_queue; // Queue for process
     vector<CpuWorker> workers;
+    vector<thread> workerThreads; // Store worker threads
     mutex queue_mutex; 
     condition_variable cv; 
     bool stop = false;
@@ -250,28 +248,28 @@ public:
 
     void startWorkers() {
         for (auto& worker : workers) {
-			try{
-				worker.CpuThread = thread([this, &worker]() {
-					while (true) {
-						Screen screen(""); // Default initialization
+            try {
+                workerThreads.emplace_back([this, &worker]() {
+                    while (true) {
+                        Screen screen(""); // Default initialization
 
-						{
-							unique_lock<mutex> lock(queue_mutex);
-							cv.wait(lock, [this] { 
-								return stop || !screen_queue.empty(); 
-							}); // Wait for a task or stop signal
+                        unique_lock<mutex> lock(queue_mutex);
+                        cv.wait(lock, [this] { 
+                            return stop || !screen_queue.empty(); 
+                        }); // Wait for a task or stop signal
 
-							if (stop && screen_queue.empty()) return; // Exit if stop signal received and no tasks left
+                        if (stop && screen_queue.empty()) return; // Exit if stop signal received and no tasks left
 
-							screen = screen_queue.front(); // Retrieve the next task
-							screen_queue.pop(); // Remove the task from the queue
-						}
+                        screen = screen_queue.front(); // Retrieve the next task
+                        screen_queue.pop(); // Remove the task from the queue
 
-						// Process the screen content
-						worker.processScreen(screen);
-					}
-				});
-			} catch (...) {
+                        // Process the screen content
+                        worker.processScreen(screen);
+                    }
+                });
+            } catch (const exception& e) {
+                cerr << "Exception in worker thread: " << e.what() << endl;
+            } catch (...) {
                 cerr << "Unknown exception in worker thread." << endl;
             }
         }
@@ -283,9 +281,9 @@ public:
             stop = true; // Set the stop flag
         }
         cv.notify_all(); // Notify all threads to wake up
-        for (auto& worker : workers) {
-            if (worker.CpuThread.joinable()) {
-                worker.CpuThread.join(); // Wait for all threads to finish
+        for (auto& workerThread : workerThreads) {
+            if (workerThread.joinable()) {
+                workerThread.join(); // Wait for all threads to finish
             }
         }
     }
@@ -302,6 +300,7 @@ public:
         cv.notify_one(); // Notify one worker thread
     }
 };
+
 
 class MainConsole : public abstract_screen {
 private:
