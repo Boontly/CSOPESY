@@ -26,6 +26,14 @@ struct BufferEntry {
 	WORD color;
 };
 
+string convert_unix_to_string(time_t unix_timestamp) {
+    struct tm *time_info;
+    time_info = localtime(&unix_timestamp);
+    char time_string[100];
+    strftime(time_string, sizeof(time_string), "(%m/%d/%Y %I:%M:%S%p)", time_info);
+    return time_string;
+}
+
 static string generateRandomName() {
 	const string characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	string random_name;
@@ -78,6 +86,7 @@ private:
 	int totalLine;
 	int core_id;
 	time_t timestamp;
+	bool finished = false;
 	vector<string> statements;
 
 	stringstream printScreen_helper() {
@@ -105,7 +114,7 @@ public:
 	}
 
 	Screen(string name)
-		: Screen(name, 1, 100) {
+		: Screen(name, 0, 100) {
 	}
 
 	Screen(const Screen& other) {
@@ -128,8 +137,39 @@ public:
 	Screen() {
 	}
 
+
+	string listProcess() {
+		stringstream ss;
+		if (isFinished()) {
+			ss  << left << setw(20) << getProcessName() << setw(2) << "" << setw(23) << convert_unix_to_string(getTimestamp()) << setw(4) << "" << "Finished" << setw(5) << "" << getCurrentLine() << " / " << getTotalLine();
+		} else {
+			ss  << left << setw(20) << getProcessName() << setw(2) << "" << setw(23) << convert_unix_to_string(getTimestamp()) << setw(4) << "" << "Core: " << getCoreId() << setw(5) << "" << getCurrentLine() << " / " << getTotalLine();
+		}
+		return ss.str();
+	}
+
 	string getProcessName() const {
 		return processName;
+	}
+
+	int getCoreId() const {
+		return core_id;
+	}
+
+	bool isFinished() const {
+		return finished;
+	}
+
+	void setCoreId(int id) {
+		core_id = id;
+	}
+
+	void updateCurrentLine() {
+		currentLine++;
+	}
+
+	void setFinished(){
+		finished = true;
 	}
 
 	int getCurrentLine() const {
@@ -217,13 +257,16 @@ public:
 
     // Method to process the screen
     void processScreen(shared_ptr<Screen> screen) {
-        string filename = "dog_" + screen->getProcessName();
+        string filename =  screen->getProcessName();
         vector<string> commands_to_be_printed = screen->getStatements();
         // Open the file to append the print command information
         ofstream outFile(filename, ios::app);
         if (outFile.is_open()) {
+			screen->setCoreId(id);
             // Get current time
             time_t now = time(nullptr);
+			outFile << "Process name: " << filename << endl;
+			outFile << "Logs: " << endl << endl;
 
             // Format and write the current timestamp and core ID to the file
 
@@ -232,9 +275,11 @@ public:
             	ostringstream oss;
 				oss << "(" << put_time(localtime(&now), "%Y-%m-%d %H:%M:%S") << ") | Core: " << id << " | \"" << command << "\"\n";
             	outFile << oss.str();
+				screen->updateCurrentLine();
+				this_thread::sleep_for(chrono::milliseconds(500)); 
             }
-
             outFile << endl; // End the line after all commands are written
+			screen->setFinished();
             outFile.close(); // Close the file after writing
         } else {
             cerr << "Error opening file: " << filename << endl;
@@ -319,7 +364,7 @@ private:
 	Scheduler scheduler;
 	string currentView = "MainMenu";
 	bool continue_program = true;
-	map<string, Screen> screensAvailable;
+	map<string, shared_ptr<Screen>> screensAvailable;
 
 	void dummy_screens() {
 		for (int i = 0; i < 10; i++) {
@@ -329,8 +374,8 @@ private:
 			}
 
 			auto screen = make_shared<Screen>(name);
-			screensAvailable[name] = *screen;
-			screensAvailable[name].writeNotOpenScreen();
+			screensAvailable[name] = screen;
+			screensAvailable[name]->writeNotOpenScreen();
 
 			vector<string> process_lister;
 			for (int j = 0; j < 100; j++) {
@@ -391,12 +436,25 @@ private:
 					invalidCommand(command_to_check);
 					return true;
 				}
-				write("Available Screens:");
+				write("--------------------------------------");
+				write("Running processes:");
+				vector<shared_ptr<Screen>> processingScreens;
+				vector<shared_ptr<Screen>> finishedScreens;
 				for (auto [_, sc] : screensAvailable) {
-					string content = sc.getProcessName();
-					write(sc.getProcessName());
+					if (sc->isFinished()) {
+						finishedScreens.push_back(sc);
+					} else {
+						processingScreens.push_back(sc);
+					}
 				}
-				write("");
+				for (auto sc : processingScreens) {
+					write(sc->listProcess());
+				}
+				write("\nFinished processes:");
+				for (auto sc : finishedScreens) {
+					write(sc->listProcess());
+				}
+				write("--------------------------------------");
 			}
 
 			else if (seperatedCommand[1] == "-r") {
@@ -404,8 +462,8 @@ private:
 					screenNotFound();
 					return true;
 				}
-				screensAvailable[seperatedCommand[2]].redraw();
-				currentView = screensAvailable[seperatedCommand[2]].getProcessName();
+				screensAvailable[seperatedCommand[2]]->redraw();
+				currentView = screensAvailable[seperatedCommand[2]]->getProcessName();
 			}
 			else if (seperatedCommand[1] == "-s") {
 				if (screensAvailable.count(seperatedCommand[2])) {
@@ -413,9 +471,9 @@ private:
 					return true;
 				}
 				Screen sc(seperatedCommand[2]);
-				screensAvailable[seperatedCommand[2]] = sc;
-				screensAvailable[seperatedCommand[2]].openScreen();
-				currentView = screensAvailable[seperatedCommand[2]].getProcessName();
+				screensAvailable[seperatedCommand[2]] = make_shared<Screen>(sc);
+				screensAvailable[seperatedCommand[2]]->openScreen();
+				currentView = screensAvailable[seperatedCommand[2]]->getProcessName();
 			}
 			else {
 				invalidCommand(command_to_check);
@@ -463,7 +521,7 @@ private:
 			return mainMenuCommand(seperatedCommand, command_to_check);
 		}
 		else {
-			if (screensAvailable[currentView].screenCommand(seperatedCommand, command_to_check)) {
+			if (screensAvailable[currentView]->screenCommand(seperatedCommand, command_to_check)) {
 				currentView = "MainMenu";
 				this->redraw();
 			}
