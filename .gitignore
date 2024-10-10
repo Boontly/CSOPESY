@@ -2,5 +2,5 @@
 CSOPESY/x64
 /x64
 /.vscode
-.exe
-.txt
+*.exe
+*.txt

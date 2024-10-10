@@ -379,7 +379,6 @@ private:
 	
 			auto screen = make_shared<Screen>(name);
 			screensAvailable[name] = screen;
-			screensAvailable[name]->writeNotOpenScreen();
 
 			vector<string> process_lister;
 			for (int j = 0; j < 100; j++) {
