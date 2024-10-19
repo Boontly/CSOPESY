@@ -24,8 +24,7 @@
 using namespace std;
 typedef long long ll;
 
-class MainConsole : public abstract_screen
-{
+class MainConsole : public abstract_screen {
 private:
 	string currentView = "MainMenu";
 	bool continue_program = true;
@@ -35,51 +34,41 @@ private:
 	bool schedulerRunning = false;
 	int schedulerCtr = 0;
 
-	void commandNotRecognize(string command_to_check)
-	{
+	void commandNotRecognize(string command_to_check) {
 		write("Unknown command: " + command_to_check);
 	}
 
-	void invalidCommand(string command_to_check)
-	{
+	void invalidCommand(string command_to_check) {
 		write("Invalid Arguments for " + command_to_check);
 	}
 
-	void screenNotFound(string name)
-	{
+	void screenNotFound(string name) {
 		write("Process " + name + " not found.");
 	}
 
-	bool mainMenuCommand(vector<string> seperatedCommand, string command_to_check)
-	{
-		const set<string> commands = {"initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit"};
+	bool mainMenuCommand(vector<string> seperatedCommand, string command_to_check) {
+		const set<string> commands = { "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit" };
 
-		if (!commands.count(seperatedCommand[0]))
-		{
+		if (!commands.count(seperatedCommand[0])) {
 			commandNotRecognize(command_to_check);
 			return true;
 		}
 
-		if (seperatedCommand[0] == "exit")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		if (seperatedCommand[0] == "exit") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
 			return false;
 		}
 
-		if (seperatedCommand[0] != "initialize" && !scheduler.isInitialized())
-		{
+		if (seperatedCommand[0] != "initialize" && !scheduler.isInitialized()) {
 			write("Please initialize the configuration first.");
 			return true;
 		}
 
-		if (seperatedCommand[0] == "initialize")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		if (seperatedCommand[0] == "initialize") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
@@ -87,18 +76,14 @@ private:
 			write("Configuration initialized.");
 		}
 
-		else if (seperatedCommand[0] == "screen")
-		{
-			if (seperatedCommand.size() < 2 || seperatedCommand.size() > 3)
-			{
+		else if (seperatedCommand[0] == "screen") {
+			if (seperatedCommand.size() < 2 || seperatedCommand.size() > 3) {
 				invalidCommand(command_to_check);
 				return true;
 			}
 
-			if (seperatedCommand.size() == 2)
-			{
-				if (!(seperatedCommand[1] == "-ls"))
-				{
+			if (seperatedCommand.size() == 2) {
+				if (!(seperatedCommand[1] == "-ls")) {
 					invalidCommand(command_to_check);
 					return true;
 				}
@@ -110,57 +95,45 @@ private:
 				write("Running processes:");
 				vector<shared_ptr<Screen>> processingScreens;
 				vector<shared_ptr<Screen>> finishedScreens;
-				for (auto [_, sc] : screenList)
-				{
-					if (sc->isFinished())
-					{
+				for (auto [_, sc] : screenList) {
+					if (sc->isFinished()) {
 						finishedScreens.push_back(sc);
 					}
-					else
-					{
+					else {
 						processingScreens.push_back(sc);
 					}
 				}
-				for (auto sc : processingScreens)
-				{
+				for (auto sc : processingScreens) {
 					write(sc->listProcess());
 				}
 				write("\nFinished processes:");
-				for (auto sc : finishedScreens)
-				{
+				for (auto sc : finishedScreens) {
 					write(sc->listProcess());
 				}
 				write("--------------------------------------");
 			}
 
-			else if (seperatedCommand[1] == "-r")
-			{
-				if (!screenList.count(seperatedCommand[2]))
-				{
+			else if (seperatedCommand[1] == "-r") {
+				if (!screenList.count(seperatedCommand[2])) {
 					screenNotFound(seperatedCommand[2]);
 					return true;
 				}
 				currentView = screenList[seperatedCommand[2]]->getProcessName();
-				if (screenList[seperatedCommand[2]]->isFinished())
-				{
+				if (screenList[seperatedCommand[2]]->isFinished()) {
 					write("This Process is already finished.");
 					return true;
 				}
-				if (screenList[seperatedCommand[2]]->isInitialized())
-				{
+				if (screenList[seperatedCommand[2]]->isInitialized()) {
 					screenList[seperatedCommand[2]]->redraw();
 					processCommand("process-smi");
 					screenList[seperatedCommand[2]]->add("root:\\> process-smi");
 				}
-				else
-				{
+				else {
 					screenList[seperatedCommand[2]]->openScreen();
 				}
 			}
-			else if (seperatedCommand[1] == "-s")
-			{
-				if (screenList.count(seperatedCommand[2]))
-				{
+			else if (seperatedCommand[1] == "-s") {
+				if (screenList.count(seperatedCommand[2])) {
 					write("This Process is already in use.");
 					return true;
 				}
@@ -171,15 +144,12 @@ private:
 				currentView = screenList[seperatedCommand[2]]->getProcessName();
 				scheduler.pushQueue(sc);
 			}
-			else
-			{
+			else {
 				invalidCommand(command_to_check);
 			}
 		}
-		else if (seperatedCommand[0] == "clear")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		else if (seperatedCommand[0] == "clear") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
@@ -187,29 +157,23 @@ private:
 			this->buffer.clear();
 			print_header();
 		}
-		else if (seperatedCommand[0] == "scheduler-test")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		else if (seperatedCommand[0] == "scheduler-test") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
-			if (schedulerRunning)
-			{
+			if (schedulerRunning) {
 				write("Scheduler is already running.");
 			}
-			else
-			{
+			else {
 				thread testThread(&MainConsole::schedulerTest, this);
 				testThread.detach();
 				schedulerRunning = true;
 				write("Scheduler Test started.");
 			}
 		}
-		else if (seperatedCommand[0] == "scheduler-stop")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		else if (seperatedCommand[0] == "scheduler-stop") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
@@ -217,10 +181,8 @@ private:
 			schedulerRunning = false;
 			write("Scheduler Test stopped.");
 		}
-		else if (seperatedCommand[0] == "report-util")
-		{
-			if (!(seperatedCommand.size() == 1))
-			{
+		else if (seperatedCommand[0] == "report-util") {
+			if (!(seperatedCommand.size() == 1)) {
 				invalidCommand(command_to_check);
 				return true;
 			}
@@ -236,25 +198,20 @@ private:
 			outFile << "Running processes:" << endl;
 			vector<shared_ptr<Screen>> processingScreens;
 			vector<shared_ptr<Screen>> finishedScreens;
-			for (auto [_, sc] : screenList)
-			{
-				if (sc->isFinished())
-				{
+			for (auto [_, sc] : screenList) {
+				if (sc->isFinished()) {
 					finishedScreens.push_back(sc);
 				}
-				else
-				{
+				else {
 					processingScreens.push_back(sc);
 				}
 			}
-			for (auto sc : processingScreens)
-			{
+			for (auto sc : processingScreens) {
 				outFile << sc->listProcess() << endl;
 			}
 			outFile << endl
-					<< "Finished processes:" << endl;
-			for (auto sc : finishedScreens)
-			{
+				<< "Finished processes:" << endl;
+			for (auto sc : finishedScreens) {
 				outFile << sc->listProcess() << endl;
 			}
 			outFile << "--------------------------------------";
@@ -265,21 +222,16 @@ private:
 		return true;
 	}
 
-	void schedulerTest()
-	{
+	void schedulerTest() {
 		ll freq = scheduler.getBatchProcessFrequency();
-		while (scheduleBool)
-		{
-			for (ll i = 0; i < freq; i++)
-			{
+		while (scheduleBool) {
+			for (ll i = 0; i < freq; i++) {
 				continue;
 			}
 			string processName;
-			while (true)
-			{
+			while (true) {
 				processName = "p" + to_string(schedulerCtr);
-				if (!screenList.count(processName))
-				{
+				if (!screenList.count(processName)) {
 					break;
 				}
 				schedulerCtr++;
@@ -290,8 +242,7 @@ private:
 		}
 	}
 
-	bool processCommand(const string &command)
-	{
+	bool processCommand(const string& command) {
 		string command_to_check = command;
 		transform(command_to_check.begin(), command_to_check.end(), command_to_check.begin(), ::tolower);
 
@@ -299,19 +250,15 @@ private:
 		vector<string> seperatedCommand;
 
 		string splitter;
-		while (stream >> splitter)
-		{
+		while (stream >> splitter) {
 			seperatedCommand.push_back(splitter);
 		}
 
-		if (currentView == "MainMenu")
-		{
+		if (currentView == "MainMenu") {
 			return mainMenuCommand(seperatedCommand, command_to_check);
 		}
-		else
-		{
-			if (screenList[currentView]->screenCommand(seperatedCommand, command_to_check))
-			{
+		else {
+			if (screenList[currentView]->screenCommand(seperatedCommand, command_to_check)) {
 				currentView = "MainMenu";
 				this->redraw();
 			}
@@ -319,14 +266,12 @@ private:
 		return true;
 	}
 
-	void setConsoleColor(int color)
-	{
+	void setConsoleColor(int color) {
 		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleTextAttribute(hConsole, color);
 	}
 
-	void print_header()
-	{
+	void print_header() {
 		write("   _____  _____  ____  _____  ______  _______     __");
 		write("  / ____|/ ____|/ __ \\|  __ \\|  ____|/ ____\\ \\   / /");
 		write(" | |    | (___ | |  | | |__) | |__  | (___  \\ \\_/ /");
@@ -338,23 +283,19 @@ private:
 	}
 
 public:
-	void run()
-	{
+	void run() {
 		string user_input;
 
 		continue_program = true;
 		print_header();
 
-		while (continue_program)
-		{
+		while (continue_program) {
 			cout << "root:\\> ";
 			getline(cin, user_input);
-			if (currentView != "MainMenu")
-			{
+			if (currentView != "MainMenu") {
 				screenList[currentView]->add("root:\\> " + user_input);
 			}
-			else
-			{
+			else {
 				add("root:\\> " + user_input);
 			}
 			continue_program = processCommand(user_input);
@@ -362,8 +303,7 @@ public:
 	}
 };
 
-signed main()
-{
+signed main() {
 	MainConsole console;
 	console.run();
 	return 0;

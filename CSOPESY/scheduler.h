@@ -3,8 +3,7 @@
 using namespace std;
 typedef long long ll;
 
-class Scheduler
-{
+class Scheduler {
 private:
 	int numCpu;
 	string scheduler;
@@ -19,42 +18,33 @@ private:
 	int coresUsed = 0;
 
 public:
-	void getConfig()
-	{
+	void getConfig() {
 		ifstream file("config.txt");
 		string line;
-		while (getline(file, line))
-		{
+		while (getline(file, line)) {
 			istringstream iss(line);
 			string key;
 			string value;
 			iss >> key >> value;
-			if (key == "num-cpu")
-			{
+			if (key == "num-cpu") {
 				numCpu = stoi(value);
 			}
-			else if (key == "scheduler")
-			{
+			else if (key == "scheduler") {
 				scheduler = value.substr(1, value.size() - 2);
 			}
-			else if (key == "quantum-cycles")
-			{
+			else if (key == "quantum-cycles") {
 				quantumCycles = stoull(value);
 			}
-			else if (key == "batch-process-freq")
-			{
+			else if (key == "batch-process-freq") {
 				batchProcessFrequency = stoull(value);
 			}
-			else if (key == "min-ins")
-			{
+			else if (key == "min-ins") {
 				minIns = stoull(value);
 			}
-			else if (key == "max-ins")
-			{
+			else if (key == "max-ins") {
 				maxIns = stoull(value);
 			}
-			else if (key == "delay-per-exec")
-			{
+			else if (key == "delay-per-exec") {
 				delayPerExec = stoull(value);
 			}
 		}
@@ -62,17 +52,14 @@ public:
 		start();
 		initialized = true;
 	}
-	int getCoresUsed()
-	{
+	int getCoresUsed() {
 		return coresUsed;
 	}
 
-	ll getBatchProcessFrequency()
-	{
+	ll getBatchProcessFrequency() {
 		return batchProcessFrequency;
 	}
-	string getCpuUtilization()
-	{
+	string getCpuUtilization() {
 		float utilization = (static_cast<float>(coresUsed) / numCpu) * 100;
 
 		ostringstream oss;
@@ -80,74 +67,58 @@ public:
 
 		return oss.str() + "%";
 	}
-	int getCoresAvail()
-	{
+	int getCoresAvail() {
 		return numCpu - coresUsed;
 	}
 
-	ll getMinIns()
-	{
+	ll getMinIns() {
 		return minIns;
 	}
 
-	ll getMaxIns()
-	{
+	ll getMaxIns() {
 		return maxIns;
 	}
 
-	bool isInitialized()
-	{
+	bool isInitialized() {
 		return initialized;
 	}
 
-	void start()
-	{
-		for (int i = 0; i < numCpu; i++)
-		{
+	void start() {
+		for (int i = 0; i < numCpu; i++) {
 			thread t(&Scheduler::run, this, i);
 			t.detach();
 		}
 	}
 
-	void run(int id)
-	{
-		while (true)
-		{
+	void run(int id) {
+		while (true) {
 			shared_ptr<Screen> screen;
 			{
 				lock_guard<mutex> lock(queueMutex);
-				if (!readyQueue.empty())
-				{
+				if (!readyQueue.empty()) {
 					screen = readyQueue.front();
 					readyQueue.pop();
 				}
-				else
-				{
+				else {
 					continue;
 				}
 			}
 			screen->setCoreId(id);
 			coresUsed++;
-			if (scheduler == "rr")
-			{
-				for (int i = 0; i < quantumCycles; i++)
-				{
-					if (screen->isFinished())
-					{
+			if (scheduler == "rr") {
+				for (int i = 0; i < quantumCycles; i++) {
+					if (screen->isFinished()) {
 						break;
 					}
 					screen->execute();
 					this_thread::sleep_for(chrono::milliseconds(delayPerExec));
 				}
-				if (!screen->isFinished())
-				{
+				if (!screen->isFinished()) {
 					pushQueue(screen);
 				}
 			}
-			else if (scheduler == "fcfs")
-			{
-				while (!screen->isFinished())
-				{
+			else if (scheduler == "fcfs") {
+				while (!screen->isFinished()) {
 					screen->execute();
 					this_thread::sleep_for(chrono::milliseconds(delayPerExec));
 				}
@@ -156,8 +127,7 @@ public:
 		}
 	}
 
-	void pushQueue(shared_ptr<Screen> screen)
-	{
+	void pushQueue(shared_ptr<Screen> screen) {
 		lock_guard<mutex> lock(queueMutex);
 		readyQueue.push(screen);
 	}
