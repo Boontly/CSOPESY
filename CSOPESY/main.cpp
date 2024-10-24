@@ -130,6 +130,7 @@ private:
 				}
 				else {
 					screenList[seperatedCommand[2]]->openScreen();
+					screenList[seperatedCommand[2]]->initialize();
 				}
 			}
 			else if (seperatedCommand[1] == "-s") {
