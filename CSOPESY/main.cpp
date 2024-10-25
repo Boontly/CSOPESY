@@ -121,6 +121,7 @@ private:
 				currentView = screenList[seperatedCommand[2]]->getProcessName();
 				if (screenList[seperatedCommand[2]]->isFinished()) {
 					write("This Process is already finished.");
+					currentView = "MainMenu";
 					return true;
 				}
 				if (screenList[seperatedCommand[2]]->isInitialized()) {
