@@ -79,6 +79,10 @@ public:
 		return maxIns;
 	}
 
+	ll getDelayPerExec() {
+		return delayPerExec;
+	}
+
 	bool isInitialized() {
 		return initialized;
 	}

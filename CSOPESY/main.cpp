@@ -17,6 +17,8 @@
 #include <memory>
 #include <fstream>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 
 #include "screen.h"
 #include "scheduler.h"
@@ -226,21 +228,24 @@ private:
 
 	void schedulerTest() {
 		ll freq = scheduler.getBatchProcessFrequency();
+		ll ctr = 0;
+		ll delay = scheduler.getDelayPerExec();
 		while (scheduleBool) {
-			for (ll i = 0; i < freq; i++) {
-				continue;
-			}
-			string processName;
-			while (true) {
-				processName = "p" + to_string(schedulerCtr);
-				if (!screenList.count(processName)) {
-					break;
+			if (ctr == freq) {
+				ctr = 0;
+				string processName;
+				while (true) {
+					processName = "p" + to_string(schedulerCtr);
+					if (!screenList.count(processName)) {
+						break;
+					}
+					schedulerCtr++;
 				}
-				schedulerCtr++;
-			}
-			auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
-			screenList[processName] = sc;
-			scheduler.pushQueue(sc);
+				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
+				screenList[processName] = sc;
+				scheduler.pushQueue(sc);
+			} else {ctr++;}
+			this_thread::sleep_for(chrono::milliseconds(delay));
 		}
 	}
 
