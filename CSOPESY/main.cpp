@@ -19,7 +19,6 @@
 #include <filesystem>
 #include <thread>
 #include <chrono>
-
 #include "screen.h"
 #include "scheduler.h"
 
@@ -102,7 +101,9 @@ private:
 						finishedScreens.push_back(sc);
 					}
 					else {
-						processingScreens.push_back(sc);
+						if (!scheduler.isInQueue(sc)) {
+							processingScreens.push_back(sc);
+						}
 					}
 				}
 				for (auto sc : processingScreens) {
@@ -231,7 +232,7 @@ private:
 		ll ctr = 0;
 		ll delay = scheduler.getDelayPerExec();
 		while (scheduleBool) {
-			if (ctr == freq) {
+			if (ctr >= freq) {
 				ctr = 0;
 				string processName;
 				while (true) {
@@ -245,13 +246,17 @@ private:
 				screenList[processName] = sc;
 				scheduler.pushQueue(sc);
 			} else {ctr++;}
-			this_thread::sleep_for(chrono::milliseconds(delay));
+			// this_thread::sleep_for(chrono::milliseconds(delay));
 		}
 	}
 
 	bool processCommand(const string& command) {
 		string command_to_check = command;
 		transform(command_to_check.begin(), command_to_check.end(), command_to_check.begin(), ::tolower);
+
+		if (command_to_check.empty() || command_to_check == " " || command_to_check == "\n") {
+			return true;
+		}
 
 		stringstream stream(command);
 		vector<string> seperatedCommand;

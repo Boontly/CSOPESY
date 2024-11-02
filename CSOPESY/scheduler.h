@@ -15,7 +15,7 @@ private:
 	bool initialized = false;
 	queue<shared_ptr<Screen>> readyQueue;
 	mutex queueMutex;
-	int coresUsed = 0;
+	atomic<int> coresUsed = 0;
 
 public:
 	void getConfig() {
@@ -44,7 +44,7 @@ public:
 			else if (key == "max-ins") {
 				maxIns = stoull(value);
 			}
-			else if (key == "delay-per-exec") {
+			else if (key == "delays-per-exec") {
 				delayPerExec = stoull(value);
 			}
 		}
@@ -108,10 +108,11 @@ public:
 				}
 			}
 			screen->setCoreId(id);
-			coresUsed++;
+			coresUsed.fetch_add(1);
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
 					if (screen->isFinished()) {
+						this_thread::sleep_for(chrono::milliseconds(delayPerExec));
 						break;
 					}
 					screen->execute();
@@ -127,12 +128,31 @@ public:
 					this_thread::sleep_for(chrono::milliseconds(delayPerExec));
 				}
 			}
-			coresUsed--;
+			coresUsed.fetch_sub(1);
 		}
 	}
 
 	void pushQueue(shared_ptr<Screen> screen) {
 		lock_guard<mutex> lock(queueMutex);
 		readyQueue.push(screen);
+	}
+
+	bool isInQueue (shared_ptr<Screen> screen) {
+		lock_guard<mutex> lock(queueMutex);
+		queue<shared_ptr<Screen>> tempQueue;
+		bool found = false;
+		while (!readyQueue.empty()) {
+			auto sc = readyQueue.front();
+			readyQueue.pop();
+			if (sc == screen) {
+				found = true;
+			}
+			tempQueue.push(sc);
+		}
+		while (!tempQueue.empty()) {
+			readyQueue.push(tempQueue.front());
+			tempQueue.pop();
+		}
+		return found;
 	}
 };
