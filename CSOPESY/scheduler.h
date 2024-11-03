@@ -148,22 +148,4 @@ public:
 		readyQueue.push(screen);
 	}
 
-	bool isInQueue (shared_ptr<Screen> screen) {
-		lock_guard<mutex> lock(queueMutex);
-		queue<shared_ptr<Screen>> tempQueue;
-		bool found = false;
-		while (!readyQueue.empty()) {
-			auto sc = readyQueue.front();
-			readyQueue.pop();
-			if (sc == screen) {
-				found = true;
-			}
-			tempQueue.push(sc);
-		}
-		while (!tempQueue.empty()) {
-			readyQueue.push(tempQueue.front());
-			tempQueue.pop();
-		}
-		return found;
-	}
 };
