@@ -112,11 +112,11 @@ public:
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
 					if (screen->isFinished()) {
-						this_thread::sleep_for(chrono::milliseconds(delayPerExec));
+						delay();
 						break;
 					}
 					screen->execute();
-					this_thread::sleep_for(chrono::milliseconds(delayPerExec));
+					delay();
 				}
 				if (!screen->isFinished()) {
 					pushQueue(screen);
@@ -126,10 +126,20 @@ public:
 			else if (scheduler == "fcfs") {
 				while (!screen->isFinished()) {
 					screen->execute();
-					this_thread::sleep_for(chrono::milliseconds(delayPerExec));
+					delay();
 				}
 			}
 			coresUsed.fetch_sub(1);
+		}
+	}
+
+	void delay() {
+		ll ctr = 0;
+		while (true) {
+			ctr++;
+			if (ctr >= delayPerExec) {
+				break;
+			}
 		}
 	}
 
