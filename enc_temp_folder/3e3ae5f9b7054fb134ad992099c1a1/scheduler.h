@@ -120,7 +120,6 @@ public:
 				}
 				if (!screen->isFinished()) {
 					pushQueue(screen);
-					screen->setCoreId(-1);
 				}
 			}
 			else if (scheduler == "fcfs") {
