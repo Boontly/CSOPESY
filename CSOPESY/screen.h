@@ -78,6 +78,10 @@ public:
 		currentLine = other.currentLine;
 		totalLine = other.totalLine;
 		timestamp = other.timestamp;
+		finished = other.finished;
+		initialized = other.initialized;
+		core_id = other.core_id;
+
 	}
 
 	Screen& operator=(const Screen& other) {

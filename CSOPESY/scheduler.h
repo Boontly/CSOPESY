@@ -119,8 +119,8 @@ public:
 					delay();
 				}
 				if (!screen->isFinished()) {
-					pushQueue(screen);
 					screen->setCoreId(-1);
+					pushQueue(screen);
 				}
 			}
 			else if (scheduler == "fcfs") {

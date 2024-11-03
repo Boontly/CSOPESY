@@ -94,24 +94,23 @@ private:
 				write("");
 				write("--------------------------------------");
 				write("Running processes:");
-				vector<shared_ptr<Screen>> processingScreens;
-				vector<shared_ptr<Screen>> finishedScreens;
-				for (auto [_, sc] : screenList) {
+				vector<Screen> processingScreens;
+				vector<Screen> finishedScreens;
+
+				for (const auto& [_, sc] : screenList) {
 					if (sc->isFinished()) {
-						finishedScreens.push_back(sc);
+						finishedScreens.push_back(*sc); // Copy the Screen object
 					}
-					else {
-						if (!scheduler.isInQueue(sc)) {
-							processingScreens.push_back(sc);
-						}
+					else if (sc->getCoreId() != -1) {
+						processingScreens.push_back(*sc); // Copy the Screen object
 					}
 				}
 				for (auto sc : processingScreens) {
-					write(sc->listProcess());
+					write(sc.listProcess());
 				}
 				write("\nFinished processes:");
 				for (auto sc : finishedScreens) {
-					write(sc->listProcess());
+					write(sc.listProcess());
 				}
 				write("--------------------------------------");
 			}
