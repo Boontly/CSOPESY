@@ -200,23 +200,24 @@ private:
 			outFile << endl;
 			outFile << "--------------------------------------" << endl;
 			outFile << "Running processes:" << endl;
-			vector<shared_ptr<Screen>> processingScreens;
-			vector<shared_ptr<Screen>> finishedScreens;
-			for (auto [_, sc] : screenList) {
+			vector<Screen> processingScreens;
+			vector<Screen> finishedScreens;
+
+			for (const auto& [_, sc] : screenList) {
 				if (sc->isFinished()) {
-					finishedScreens.push_back(sc);
+					finishedScreens.push_back(*sc); // Copy the Screen object
 				}
-				else {
-					processingScreens.push_back(sc);
+				else if (sc->getCoreId() != -1) {
+					processingScreens.push_back(*sc); // Copy the Screen object
 				}
 			}
 			for (auto sc : processingScreens) {
-				outFile << sc->listProcess() << endl;
+				outFile << sc.listProcess() << endl;
 			}
 			outFile << endl
 				<< "Finished processes:" << endl;
 			for (auto sc : finishedScreens) {
-				outFile << sc->listProcess() << endl;
+				outFile << sc.listProcess() << endl;
 			}
 			outFile << "--------------------------------------";
 			outFile.close();
