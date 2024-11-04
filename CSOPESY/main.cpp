@@ -257,7 +257,8 @@ private:
 				}
 				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
 				screenList[processName] = sc;
-				scheduler.pushQueue(sc);
+				scheduler.pushQueue(sc);	
+				this_thread::sleep_for(chrono::milliseconds(100));
 			} else {ctr++;}
 		}
 	}
