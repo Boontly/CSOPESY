@@ -88,23 +88,33 @@ private:
 					invalidCommand(command_to_check);
 					return true;
 				}
-				write("CPU utilization: " + scheduler.getCpuUtilization());
-				write("Cores used: " + to_string(scheduler.getCoresUsed()));
-				write("Cores available: " + to_string(scheduler.getCoresAvail()));
+				vector<Screen> processingScreens;
+				vector<Screen> finishedScreens;
+				{
+					lock_guard<mutex> lock(scheduler.queueMutex);
+					write("CPU utilization: " + scheduler.getCpuUtilization());
+					write("Cores used: " + to_string(scheduler.getCoresUsed()));
+					write("Cores available: " + to_string(scheduler.getCoresAvail()));
+
+					for (const auto& [_, sc] : screenList) {
+						if (sc->isFinished()) {
+							finishedScreens.push_back(*sc); // Copy the Screen object
+						}
+					}
+					for (const auto& [id, screenPtr] : scheduler.runningScreens) {
+						if (screenPtr != nullptr) {
+							processingScreens.push_back(*screenPtr); // Copy the Screen object
+						}
+					}
+					
+					
+				}
+
 				write("");
 				write("--------------------------------------");
 				write("Running processes:");
-				vector<Screen> processingScreens;
-				vector<Screen> finishedScreens;
 
-				for (const auto& [_, sc] : screenList) {
-					if (sc->isFinished()) {
-						finishedScreens.push_back(*sc); // Copy the Screen object
-					}
-					else if (sc->getCoreId() != -1) {
-						processingScreens.push_back(*sc); // Copy the Screen object
-					}
-				}
+
 				for (auto sc : processingScreens) {
 					write(sc.listProcess());
 				}
@@ -230,11 +240,11 @@ private:
 
 	void schedulerTest() {
 		ll freq = scheduler.getBatchProcessFrequency();
-		ll ctr = 0;
+		ll ctr = 1;
 		ll delay = scheduler.getDelayPerExec();
 		while (scheduleBool) {
 			if (ctr >= freq) {
-				ctr = 0;
+				ctr = 1;
 				string processName;
 				while (true) {
 					processName = "p" + to_string(schedulerCtr);

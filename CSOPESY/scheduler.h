@@ -14,10 +14,13 @@ private:
 	int delayPerExec;
 	bool initialized = false;
 	queue<shared_ptr<Screen>> readyQueue;
-	mutex queueMutex;
-	atomic<int> coresUsed = 0;
+
+	map<int, int> coresUsed;
+
 
 public:
+	mutex queueMutex;
+	map<int, shared_ptr<Screen>> runningScreens;
 	void getConfig() {
 		ifstream file("config.txt");
 		string line;
@@ -53,14 +56,21 @@ public:
 		initialized = true;
 	}
 	int getCoresUsed() {
-		return coresUsed;
+		int totalUsed = 0;
+
+		for (const auto& [coreId, count] : coresUsed) {
+			totalUsed += count; 
+		}
+
+		return totalUsed; 
 	}
+
 
 	ll getBatchProcessFrequency() {
 		return batchProcessFrequency;
 	}
 	string getCpuUtilization() {
-		float utilization = (static_cast<float>(coresUsed) / numCpu) * 100;
+		float utilization = (static_cast<float>(getCoresUsed()) / numCpu) * 100;
 
 		ostringstream oss;
 		oss << fixed << setprecision(0) << utilization;
@@ -68,7 +78,7 @@ public:
 		return oss.str() + "%";
 	}
 	int getCoresAvail() {
-		return numCpu - coresUsed;
+		return numCpu - getCoresUsed();
 	}
 
 	ll getMinIns() {
@@ -102,13 +112,16 @@ public:
 				if (!readyQueue.empty()) {
 					screen = readyQueue.front();
 					readyQueue.pop();
+					coresUsed[id] = 1;
+					runningScreens[id] = screen;
 				}
 				else {
+					coresUsed[id]=0;
+					runningScreens[id] =  nullptr;
 					continue;
 				}
 			}
 			screen->setCoreId(id);
-			coresUsed.fetch_add(1);
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
 					if (screen->isFinished()) {
@@ -119,7 +132,6 @@ public:
 					delay();
 				}
 				if (!screen->isFinished()) {
-					screen->setCoreId(-1);
 					pushQueue(screen);
 				}
 			}
@@ -129,7 +141,7 @@ public:
 					delay();
 				}
 			}
-			coresUsed.fetch_sub(1);
+
 		}
 	}
 
