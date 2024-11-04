@@ -109,7 +109,6 @@ private:
 					
 					
 				}
-
 				write("");
 				write("--------------------------------------");
 				write("Running processes:");
@@ -204,24 +203,31 @@ private:
 			filesystem::path currentPath = filesystem::current_path();
 			string outputFileName = (currentPath / "csopesy-log.txt").string();
 			ofstream outFile(outputFileName);
+			vector<Screen> processingScreens;
+			vector<Screen> finishedScreens;
+			{
+				lock_guard<mutex> lock(scheduler.queueMutex);
+				outFile << "CPU utilization: " << scheduler.getCpuUtilization() << endl;
+				outFile << "Cores used: " << scheduler.getCoresUsed() << endl;
+				outFile << "Cores available: " << scheduler.getCoresAvail() << endl;
+				for (const auto& [_, sc] : screenList) {
+					if (sc->isFinished()) {
+						finishedScreens.push_back(*sc); // Copy the Screen object
+					}
+				}
+				for (const auto& [id, screenPtr] : scheduler.runningScreens) {
+					if (screenPtr != nullptr) {
+						processingScreens.push_back(*screenPtr); // Copy the Screen object
+					}
+				}
+				}
 
-			outFile << "CPU utilization: " << scheduler.getCpuUtilization() << endl;
-			outFile << "Cores used: " << scheduler.getCoresUsed() << endl;
-			outFile << "Cores available: " << scheduler.getCoresAvail() << endl;
 			outFile << endl;
 			outFile << "--------------------------------------" << endl;
 			outFile << "Running processes:" << endl;
-			vector<Screen> processingScreens;
-			vector<Screen> finishedScreens;
 
-			for (const auto& [_, sc] : screenList) {
-				if (sc->isFinished()) {
-					finishedScreens.push_back(*sc); // Copy the Screen object
-				}
-				else if (sc->getCoreId() != -1) {
-					processingScreens.push_back(*sc); // Copy the Screen object
-				}
-			}
+
+
 			for (auto sc : processingScreens) {
 				outFile << sc.listProcess() << endl;
 			}
@@ -256,6 +262,7 @@ private:
 				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
 				screenList[processName] = sc;
 				scheduler.pushQueue(sc);
+				this_thread::sleep_for(chrono::milliseconds(1));
 			} else {ctr++;}
 		}
 	}
