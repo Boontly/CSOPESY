@@ -170,6 +170,7 @@ private:
 				write("Scheduler is already running.");
 			}
 			else {
+				scheduleBool = true;
 				thread testThread(&MainConsole::schedulerTest, this);
 				testThread.detach();
 				schedulerRunning = true;
@@ -246,7 +247,6 @@ private:
 				screenList[processName] = sc;
 				scheduler.pushQueue(sc);
 			} else {ctr++;}
-			// this_thread::sleep_for(chrono::milliseconds(delay));
 		}
 	}
 
