@@ -44,7 +44,7 @@ public:
 			else if (key == "max-ins") {
 				maxIns = stoull(value);
 			}
-			else if (key == "delays-per-exec") {
+			else if (key == "delay-per-exec") {
 				delayPerExec = stoull(value);
 			}
 		}
