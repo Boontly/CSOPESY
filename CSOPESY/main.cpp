@@ -113,7 +113,6 @@ private:
 				write("--------------------------------------");
 				write("Running processes:");
 
-
 				for (auto sc : processingScreens) {
 					write(sc.listProcess());
 				}
@@ -225,9 +224,6 @@ private:
 			outFile << endl;
 			outFile << "--------------------------------------" << endl;
 			outFile << "Running processes:" << endl;
-
-
-
 			for (auto sc : processingScreens) {
 				outFile << sc.listProcess() << endl;
 			}
@@ -262,7 +258,6 @@ private:
 				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
 				screenList[processName] = sc;
 				scheduler.pushQueue(sc);
-				this_thread::sleep_for(chrono::milliseconds(1));
 			} else {ctr++;}
 		}
 	}

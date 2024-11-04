@@ -156,7 +156,9 @@ public:
 		if (currentLine == totalLine) {
 			finished = true;
 		}
-		this_thread::sleep_for(chrono::milliseconds(1));
+		for (int i = 0; i < 100; i++) {
+			// Do nothing
+		}
 	}
 
 	void openScreen() {
