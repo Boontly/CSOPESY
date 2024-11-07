@@ -37,6 +37,7 @@ public:
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 	}
+	
 };
 
 class Screen : public abstract_screen {
@@ -48,6 +49,8 @@ private:
 	bool finished = false;
 	bool initialized = false;
 	int core_id = -1;
+	ll memStart = -1;
+	ll memEnd = -1;
 
 	stringstream
 		printScreen_helper() {
@@ -210,5 +213,16 @@ public:
 			return false;
 		}
 		return false;
+	}
+
+	void setMemAddr(ll start, ll end) {
+		memStart = start;
+		memEnd = end;
+	}
+	ll getMemStart() {
+		return memStart;
+	}
+	ll getMemEnd() {
+		return memEnd;
 	}
 };

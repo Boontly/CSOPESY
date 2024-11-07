@@ -17,7 +17,6 @@
 #include <memory>
 #include <fstream>
 #include <filesystem>
-#include <thread>
 #include <chrono>
 #include "screen.h"
 #include "scheduler.h"
@@ -31,8 +30,7 @@ private:
 	bool continue_program = true;
 	map<string, shared_ptr<Screen>> screenList;
 	Scheduler scheduler;
-	atomic<bool> scheduleBool = true;
-	bool schedulerRunning = false;
+	atomic<bool> scheduleBool = false;
 	int schedulerCtr = 0;
 
 	void commandNotRecognize(string command_to_check) {
@@ -174,14 +172,13 @@ private:
 				invalidCommand(command_to_check);
 				return true;
 			}
-			if (schedulerRunning) {
+			if (scheduleBool) {
 				write("Scheduler is already running.");
 			}
 			else {
 				scheduleBool = true;
 				thread testThread(&MainConsole::schedulerTest, this);
 				testThread.detach();
-				schedulerRunning = true;
 				write("Scheduler Test started.");
 			}
 		}
@@ -191,7 +188,6 @@ private:
 				return true;
 			}
 			scheduleBool = false;
-			schedulerRunning = false;
 			write("Scheduler Test stopped.");
 		}
 		else if (seperatedCommand[0] == "report-util") {
@@ -313,7 +309,8 @@ public:
 
 		continue_program = true;
 		print_header();
-
+		int ctr = 0;
+		int ctr2 = 0;
 		while (continue_program) {
 			cout << "root:\\> ";
 			getline(cin, user_input);
