@@ -7,6 +7,7 @@ struct MemoryFrame {
     int start;
 	int end;
     bool free;
+	string screenName;
 };
 
 class Scheduler {
@@ -25,6 +26,7 @@ private:
 	queue<shared_ptr<Screen>> readyQueue;
 	vector<MemoryFrame> memoryFrames;
 	map<int, int> coresUsed;
+	atomic<int> qq =0;
 
 
 public:
@@ -108,7 +110,6 @@ public:
 
 	ll getExternalFragmentation(){
 		int ctr = 0;
-		lock_guard<mutex> lock(queueMutex);
 		for (auto& block : memoryFrames) {
 			if (block.free) {
 				ctr++;
@@ -145,9 +146,17 @@ public:
 						coresUsed[id] = 1; 
 						runningScreens[id] = screen;
 						screen->setMemAddr(mem[0], mem[1]);
+						int endValue = mem[1];
+						auto thisMem = std::find_if(memoryFrames.begin(), memoryFrames.end(), [endValue](const MemoryFrame& frame) {
+							return frame.end == endValue;
+						});
+						thisMem->screenName = screen->getProcessName();
+
 					} else { 
 						coresUsed[id] = 0; 
 						runningScreens[id] = nullptr; 
+						pushQueue(readyQueue.front());
+						readyQueue.pop();
 						continue; 
 					}
 				} else { 
@@ -159,6 +168,11 @@ public:
 			screen->setCoreId(id);
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
+					{
+						lock_guard<mutex> lock(queueMutex);
+						printMemory();
+					}
+
 					if (screen->isFinished()) {
 						delay();
 						break;
@@ -251,7 +265,42 @@ public:
 		return {-1, -1};
 	}
 
-	void memoryAllocatorHelper() {
-		
+	void printMemory() {
+		time_t now = time(0);
+		struct tm currentTime;
+		localtime_s(&currentTime, &now); 
+		char buffer[80];
+		strftime(buffer, sizeof(buffer), "%m/%d/%Y %I:%M:%S%p", &currentTime);
+		filesystem::path currentPath = filesystem::current_path();
+		string filename = string("memory_stamp_") + to_string(qq) + ".txt";
+		qq++;
+		string outputFileName = (currentPath / filename).string();
+		ofstream outFile(outputFileName);
+		outFile << "Timestamp: (" << buffer << ")" << endl;
+		outFile << "Number of processes in memory: " << getCoresUsed() << endl;
+		outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
+		outFile << "---end--- = " << max_overall_mem;
+
+		vector<Screen> screens;
+		for (const auto& [id, screenPtr] : runningScreens) {
+			if (screenPtr != nullptr) {
+				screens.push_back(*screenPtr); // Copy the Screen object
+			}
+		}
+		sort(screens.begin(), screens.end(), [](Screen& a, Screen& b) {
+			return a.getMemStart() < b.getMemStart();
+			});
+		for (auto& screen : screens) {
+
+			// Check if the shared_ptr is nullptr before accessing its methods
+				outFile << endl << endl << screen.getMemEnd();     // Print memEnd
+				outFile << endl << screen.getProcessName(); // Print screenName
+				outFile << endl << screen.getMemStart();    // Print start
+		}
+
+		outFile << endl << endl << "---start--- = 0";
+		outFile.close();
 	}
+
 };
+

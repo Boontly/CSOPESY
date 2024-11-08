@@ -84,6 +84,8 @@ public:
 		finished = other.finished;
 		initialized = other.initialized;
 		core_id = other.core_id;
+		memStart = other.memStart;
+		memEnd = other.memEnd;
 
 	}
 
