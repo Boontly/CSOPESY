@@ -7,7 +7,6 @@ struct MemoryFrame {
     int start;
 	int end;
     bool free;
-	string screenName;
 };
 
 class Scheduler {
@@ -150,7 +149,6 @@ public:
 						auto thisMem = std::find_if(memoryFrames.begin(), memoryFrames.end(), [endValue](const MemoryFrame& frame) {
 							return frame.end == endValue;
 						});
-						thisMem->screenName = screen->getProcessName();
 
 					} else { 
 						coresUsed[id] = 0; 
