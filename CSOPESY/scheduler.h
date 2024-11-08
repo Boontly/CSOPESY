@@ -131,8 +131,6 @@ public:
 	void run(int id) {
 		while (true) {
 			shared_ptr<Screen> screen;
-
-			bool memoryAllocated = false;
 			{
 				lock_guard<mutex> lock(queueMutex);
 				// if readyQ is not empty and there is enough memory
@@ -154,10 +152,6 @@ public:
 						continue; 
 					}
 				} else { 
-					if (runningScreens[id] != nullptr) {
-						freeMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
-						runningScreens[id]->setMemAddr(-1, -1);
-					}
 					coresUsed[id] = 0; 
 					runningScreens[id] = nullptr; 
 					continue; 
@@ -175,9 +169,6 @@ public:
 					screen->execute();
 					delay();
 				}
-				if (!screen->isFinished()) {
-					pushQueue(screen);
-				}
 			}
 			else if (scheduler == "fcfs") {
 				while (!screen->isFinished()) {
@@ -185,7 +176,13 @@ public:
 					delay();
 				}
 			}
-
+			freeMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
+			runningScreens[id]->setMemAddr(-1, -1);
+			if (!screen->isFinished()) {
+				pushQueue(screen);
+			}
+			coresUsed[id] = 0; 
+			runningScreens[id] = nullptr; 
 		}
 	}
 
@@ -268,19 +265,24 @@ public:
 		filesystem::path currentPath = filesystem::current_path();
 		string filename = string("memory_stamp_") + to_string(qq) + ".txt";
 		qq++;
-		string outputFileName = (currentPath / filename).string();
+		// create dir "mem" if it doesn't exist
+		if (!filesystem::exists(currentPath / "mem")) {
+			filesystem::create_directory(currentPath / "mem");
+		}
+		filesystem::path outputFileName = (currentPath / "mem" / filename).string();
 		ofstream outFile(outputFileName);
 		vector<Screen> screens;
 		for (const auto& [id, screenPtr] : runningScreens) {
-			if (screenPtr != nullptr) {
+			if (screenPtr != nullptr && screenPtr->getMemStart() != -1) {
 				screens.push_back(*screenPtr); // Copy the Screen object
 			}
 		}
 		sort(screens.begin(), screens.end(), [](Screen& a, Screen& b) -> bool {
 			return a.getMemStart() > b.getMemStart();
-			});
+		});
+
 		outFile << "Timestamp: (" << buffer << ")" << endl;
-		outFile << "Number of processes in memory: " << getCoresUsed() << endl;
+		outFile << "Number of processes in memory: " << to_string(screens.size()) << endl;
 		outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
 		outFile << "---end--- = " << max_overall_mem;
 		for (auto& screen : screens) {
