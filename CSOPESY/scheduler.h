@@ -26,6 +26,7 @@ private:
 	vector<MemoryFrame> memoryFrames;
 	map<int, int> coresUsed;
 	atomic<int> qq =0;
+	vector<shared_ptr<Screen>> procInMem;
 
 
 public:
@@ -137,31 +138,46 @@ public:
 				lock_guard<mutex> lock(queueMutex);
 				// if readyQ is not empty and there is enough memory
 				// compare number of frames required and number of frames available
+				if (runningScreens[id] != nullptr && runningScreens[id]->isFinished()) {
+					freeMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
+					for (int i = 0; i < procInMem.size(); i++) {
+						if (procInMem[i] == runningScreens[id]) {
+							procInMem.erase(procInMem.begin() + i);
+							break;
+						}
+					}
+					runningScreens[id]->setMemAddr(-1, -1);
+					coresUsed[id] = 0;
+					runningScreens[id] = nullptr;
+				}
 				if (!readyQueue.empty()) {
-					vector<ll> mem = allocateMemory();
-					if (mem[0] != -1 && mem[1] != -1) {
+					if (readyQueue.front()->getMemStart() != -1) {
 						screen = readyQueue.front();
 						readyQueue.pop();
-						coresUsed[id] = 1; 
 						runningScreens[id] = screen;
-						screen->setMemAddr(mem[0], mem[1]);
-
-					} else { 
-						coresUsed[id] = 0; 
-						runningScreens[id] = nullptr; 
-						pushQueue(readyQueue.front());
-						readyQueue.pop();
-						continue; 
+						coresUsed[id] = 1;
 					}
-				} else { 
-					if (runningScreens[id] != nullptr) {
-						freeMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
-						runningScreens[id]->setMemAddr(-1, -1);
+					else {
+						vector<ll> mem = allocateMemory();
+						if (mem[0] != -1 && mem[1] != -1) {
+							screen = readyQueue.front();
+							procInMem.push_back(screen);
+							readyQueue.pop();
+							coresUsed[id] = 1;
+							runningScreens[id] = screen;
+							screen->setMemAddr(mem[0], mem[1]);
+						}
+						else {
+							pushQueue(readyQueue.front());
+							readyQueue.pop();
+							continue;
+						}
 					}
-					coresUsed[id] = 0; 
-					runningScreens[id] = nullptr; 
-					continue; 
-
+				}
+				else {
+					coresUsed[id] = 0;
+					runningScreens[id] = nullptr;
+					continue;
 				}
 			}
 			screen->setCoreId(id);
@@ -171,11 +187,12 @@ public:
 						delay();
 						break;
 					}
-						printMemory();
+					printMemory();
 					screen->execute();
 					delay();
 				}
 				if (!screen->isFinished()) {
+					lock_guard<mutex> lock(queueMutex);
 					pushQueue(screen);
 				}
 			}
@@ -201,7 +218,6 @@ public:
 	}
 
 	void pushQueue(shared_ptr<Screen> screen) {
-		lock_guard<mutex> lock(queueMutex);
 		readyQueue.push(screen);
 	}
 
@@ -270,25 +286,25 @@ public:
 		qq++;
 		string outputFileName = (currentPath / filename).string();
 		ofstream outFile(outputFileName);
-		vector<Screen> screens;
-		for (const auto& [id, screenPtr] : runningScreens) {
+		vector<shared_ptr<Screen>> screensorrinsass;
+		for (const auto& screenPtr : procInMem) {
 			if (screenPtr != nullptr) {
-				screens.push_back(*screenPtr); // Copy the Screen object
+				screensorrinsass.push_back(screenPtr); // Copy the Screen object
 			}
 		}
-		sort(screens.begin(), screens.end(), [](Screen& a, Screen& b) -> bool {
-			return a.getMemStart() > b.getMemStart();
+		sort(screensorrinsass.begin(), screensorrinsass.end(), [](const shared_ptr<Screen>& a, const shared_ptr<Screen>& b) -> bool {
+			return a->getMemEnd() > b->getMemEnd(); // Dereference shared_ptr to access Screen objects
 			});
 		outFile << "Timestamp: (" << buffer << ")" << endl;
 		outFile << "Number of processes in memory: " << getCoresUsed() << endl;
 		outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
 		outFile << "---end--- = " << max_overall_mem;
-		for (auto& screen : screens) {
+		for (int i = 0; i < screensorrinsass.size();i++) {
 
 			// Check if the shared_ptr is nullptr before accessing its methods
-				outFile << endl << endl << screen.getMemEnd();     // Print memEnd
-				outFile << endl << screen.getProcessName(); // Print screenName
-				outFile << endl << screen.getMemStart();    // Print start	
+				outFile << endl << endl << screensorrinsass[i]->getMemEnd();     // Print memEnd
+				outFile << endl << screensorrinsass[i]->getProcessName(); // Print screenName
+				outFile << endl << screensorrinsass[i]->getMemStart();    // Print start	
 		}
 
 		outFile << endl << endl << "---start--- = 0";

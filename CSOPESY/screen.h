@@ -221,10 +221,10 @@ public:
 		memStart = start;
 		memEnd = end;
 	}
-	ll getMemStart() {
+	ll getMemStart() const {
 		return memStart;
 	}
-	ll getMemEnd() {
+	ll getMemEnd() const {
 		return memEnd;
 	}
 };

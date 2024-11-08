@@ -152,6 +152,7 @@ private:
 				screenList[seperatedCommand[2]]->openScreen();
 				screenList[seperatedCommand[2]]->initialize();
 				currentView = screenList[seperatedCommand[2]]->getProcessName();
+				lock_guard<mutex> lock(scheduler.queueMutex);
 				scheduler.pushQueue(sc);
 			}
 			else {
