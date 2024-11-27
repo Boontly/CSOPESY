@@ -49,8 +49,7 @@ private:
 	bool finished = false;
 	bool initialized = false;
 	int core_id = -1;
-	ll memStart = -1;
-	ll memEnd = -1;
+	Scheduler scheduler;
 
 	stringstream
 		printScreen_helper() {
@@ -70,6 +69,8 @@ private:
 	}
 
 public:
+	int memory = scheduler.getMinMemPerProc() + rand() % ((scheduler.getMaxMemPerProc() + 1) - scheduler.getmin_mem_per_proc());
+
 	Screen(std::string name, int min, int max)
 		: processName(name), currentLine(1), timestamp(time(nullptr)) {
 		srand(static_cast<unsigned int>(time(nullptr)));
@@ -84,8 +85,7 @@ public:
 		finished = other.finished;
 		initialized = other.initialized;
 		core_id = other.core_id;
-		memStart = other.memStart;
-		memEnd = other.memEnd;
+		memory = other.memory;
 
 	}
 
@@ -213,16 +213,5 @@ public:
 			return false;
 		}
 		return false;
-	}
-
-	void setMemAddr(ll start, ll end) {
-		memStart = start;
-		memEnd = end;
-	}
-	ll getMemStart() const {
-		return memStart;
-	}
-	ll getMemEnd() const {
-		return memEnd;
 	}
 };

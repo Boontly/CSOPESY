@@ -6,6 +6,11 @@ using namespace std;
 typedef long long ll;
 
 extern volatile ll mainCtr;
+
+ll safeCeil(int numerator, int denominator) {
+	return (numerator + (denominator - 1)) / denominator;
+}
+
 struct MemoryFrame {
 	int start;
 	int end;
@@ -21,15 +26,21 @@ private:
 	int minIns;
 	int maxIns;
 	int delayPerExec;
-	ll max_overall_mem;
-	ll mem_per_frame;
-	ll mem_per_proc;
+	ll maxOverallMem;
+	ll memPerFrame;
+	ll minMemPerProc;
+	ll maxMemPerProc;
 	bool initialized = false;
 	queue<shared_ptr<Screen>> readyQueue;
-	vector<MemoryFrame> memoryFrames;
+	deque<MemoryFrame> memoryFrames;
 	map<int, int> coresUsed;
 	atomic<int> qq = 0;
 	vector<shared_ptr<Screen>> procInMem;
+	map<shared_ptr<Screen>, vector<MemoryFrame>> memoryMap;
+	map<shared_ptr<Screen>, pair<ll, ll>> flatMemoryMap;
+	string allocation_type = "paging";
+	deque<shared_ptr<Screen>> oldest;
+	map<int, atomic<bool>> current_process_task;
 
 
 public:
@@ -65,19 +76,23 @@ public:
 				delayPerExec = stoi(value);
 			}
 			else if (key == "max-overall-mem") {
-				max_overall_mem = stoull(value);
+				maxOverallMem = stoull(value);
 			}
 			else if (key == "mem-per-frame") {
-				mem_per_frame = stoull(value);
+				memPerFrame = stoull(value);
 			}
-			else if (key == "mem-per-proc") {
-				mem_per_proc = stoull(value);
+			else if (key == "min-mem-per-proc") {
+				minMemPerProc = stoull(value);
+			}
+			else if (key == "max-mem-per-proc") {
+				maxMemPerProc = stoull(value);
 			}
 		}
 		file.close();
 		initMemory();
 		start();
 		initialized = true;
+		allocation_type = (maxOverallMem == memPerFrame) ? "flat" : "paging";
 	}
 	int getCoresUsed() {
 		int totalUsed = 0;
@@ -104,6 +119,13 @@ public:
 		return numCpu - getCoresUsed();
 	}
 
+	ll getMinMemPerProc() {
+		return minMemPerProc;
+	}
+	ll getMaxMemPerProc() {
+		return maxMemPerProc;
+	}
+
 	ll getMinIns() {
 		return minIns;
 	}
@@ -117,8 +139,17 @@ public:
 	}
 
 	ll getMaxMem() {
-		return max_overall_mem;
+		return maxOverallMem;
 	};
+	ll getExternalFragmentation() {
+		int ctr = 0;
+		for (auto& block : memoryFrames) {
+			if (block.free) {
+				ctr++;
+			}
+		}
+		return ctr * memPerFrame;
+	}
 
 
 	bool isInitialized() {
@@ -131,10 +162,53 @@ public:
 			t.detach();
 		}
 	}
+	void runPaging(int id) {
+		while (true) {
+			shared_ptr<Screen> screen;
+			{
+				lock_guard<mutex> lock(queueMutex);
+				runningScreens.erase(id);
+				screen = readyQueue.front();
+				if (screen == nullptr) {
+					continue;
+				}
+				readyQueue.pop();
+				allocateMemoryPaging(screen);
+			}
+			current_process_task[id] = true;
+			runningScreens[id] = screen;
+			screen->setCoreId(id);
+			if (scheduler == "rr") {
+				for (int i = 0; i < quantumCycles; i++) {
+					if (!current_process_task[id]) {
+						continue;
+					}
+					if (screen->isFinished()) {
+						freeMemoryPaging(screen);
+						delay();
+						break;
+					}
+					screen->execute();
+					delay();
+				}
+				if (!screen->isFinished()) {
 
+					lock_guard<mutex> lock(queueMutex);
+					pushQueue(screen);
+				}
+			}
+			else if (scheduler == "fcfs") {
+				while (!screen->isFinished()) {
+					screen->execute();
+					delay();
+				}
+				freeMemoryPaging(screen);
+			}
 
+		}
+	}
 
-	void runs(int id) {
+	void run(int id) {
 		int prev_counter = -1;
 		while (true) {
 			shared_ptr<Screen> screen;
@@ -196,57 +270,8 @@ public:
 						delay();
 						break;
 					}
-					printMemory();
 					screen->execute();
 					delay();
-				}
-				if (!screen->isFinished()) {
-					lock_guard<mutex> lock(queueMutex);
-					pushQueue(screen);
-				}
-			}
-			else if (scheduler == "fcfs") {
-				while (!screen->isFinished()) {
-					screen->execute();
-					delay();
-				}
-			}
-
-		}
-	}
-
-	void run(int id) {
-		while (true) {
-			shared_ptr<Screen> screen;
-			{
-				lock_guard<mutex> lock(queueMutex);
-				if (!readyQueue.empty()) {
-					screen = readyQueue.front();
-					readyQueue.pop();
-					coresUsed[id] = 1;
-					runningScreens[id] = screen;
-				}
-				else {
-					coresUsed[id] = 0;
-					runningScreens[id] = nullptr;
-					continue;
-				}
-			}
-			screen->setCoreId(id);
-			if (scheduler == "rr") {
-				int prevCtr = -1;
-				int i = 0;
-				while (i < quantumCycles) {
-					if (screen->isFinished()) {
-						delay();
-						break;
-					}
-					if (prevCtr != mainCtr) {
-						prevCtr = mainCtr;
-						screen->execute();
-						delay();
-						i++;
-					}
 				}
 				if (!screen->isFinished()) {
 					lock_guard<mutex> lock(queueMutex);
@@ -264,18 +289,11 @@ public:
 	}
 
 	void delay() {
-		this_thread::sleep_for(chrono::milliseconds(10));
-		ll ctr = 0;
-		ll prevCtr = -1;
+		ll ctr = mainCtr;
 		while (true) {
-			if (delayPerExec == ctr) {
+			if (((ctr + delayPerExec) % 1000000) >= (mainCtr % 1000000)) {
 				break;
 			}
-			if (prevCtr == mainCtr) {
-				continue;
-			}
-			prevCtr = mainCtr;
-			ctr++;
 		}
 	}
 
@@ -283,95 +301,160 @@ public:
 		readyQueue.push(screen);
 	}
 
+	// paging
+	void freeMemoryPaging(shared_ptr<Screen> screen) {
+		map<shared_ptr<Screen>, vector<MemoryFrame>>::iterator it = memoryMap.find(screen);
+		if (it == memoryMap.end()) {
+			return;
+		}
+		vector<MemoryFrame> frames = memoryMap[screen];
+		for (auto& frame : frames) {
+			memoryFrames.push_back(frame);
+		}
+		memoryMap.erase(it);
+	}
+
+	void allocateMemoryPagingWithInterupt(shared_ptr<Screen> screen) {
+		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+
+		while (memoryFrames.size() < mem_to_allocate) {
+			shared_ptr<Screen> oldestScreen = oldest.front();
+			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
+				runningScreens.erase(oldestScreen->getCoreId());
+				current_process_task[oldestScreen->getCoreId()] = false;
+			}
+			freeMemoryPaging(oldestScreen);
+			oldest.pop_front();
+			readyQueue.push(oldestScreen);
+		}
+
+		while (mem_to_allocate-- > 0) {
+			MemoryFrame frame = memoryFrames.front();
+			memoryFrames.pop_front();
+			frame.free = false;
+			memoryMap[screen].push_back(frame);
+		}
+
+		oldest.push_back(screen);
+	}
+
+	bool allocateMemoryPaging(shared_ptr<Screen> screen) {
+		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+		ll freed = 0;
+		bool can_delete = false;
+
+		vector<shared_ptr<Screen>> screensToDelete;
+
+		if (mem_to_allocate > memoryFrames.size()) {
+			for (auto it = oldest.begin(); it != oldest.end(); ++it) {
+				shared_ptr<Screen> oldestScreen = *it;
+				if (!runningScreens.count(oldestScreen->getCoreId())) {
+					screensToDelete.push_back(oldestScreen);
+					freed += safeCeil(oldestScreen->memory, memPerFrame);
+					if (freed + memoryFrames.size() >= mem_to_allocate) {
+						can_delete = true;
+						break;
+					}
+				}
+			}
+			if (can_delete) {
+				for (auto x : screensToDelete) {
+					freeMemoryPaging(x);
+					auto it = find(oldest.begin(), oldest.end(), x);
+					if (it != oldest.end()) {
+						oldest.erase(it);
+					}
+					readyQueue.push(x);
+				}
+			}
+			else {
+				readyQueue.push(screen);
+				return false;
+			}
+		}
+
+		while (mem_to_allocate-- > 0) {
+			MemoryFrame frame = memoryFrames.front();
+			memoryFrames.pop_front();
+			frame.free = false;
+			memoryMap[screen].push_back(frame);
+		}
+
+		oldest.push_back(screen);
+		return true;
+	}
+
+	// pagign end here
+
 	void initMemory() {
 		// Initialize memory blocks where the first memory block starts from 0 and goes up to max overall mem
 		lock_guard<mutex> lock(queueMutex);
-		int numFrames = max_overall_mem / mem_per_frame;
+		int numFrames = maxOverallMem / memPerFrame;
 		for (int i = 0; i < numFrames; i++) {
 			MemoryFrame frame;
-			frame.start = i * mem_per_frame;
-			frame.end = frame.start + mem_per_frame - 1;
+			frame.start = i * memPerFrame;
+			frame.end = frame.start + memPerFrame - 1;
 			frame.free = true;
 			memoryFrames.push_back(frame);
 		}
 	}
 
 	void freeMemory(int start, int end) {
-		for (auto& block : memoryFrames) {
-			// If block overlaps with the range, free the block
-			if (block.start >= start && block.end <= end) {
-				block.free = true;
-			}
+		for (int i = start; i <= end; i++) {
+			memoryFrames[i].free = true;
 		}
 	}
 
+	void allocateFlatMemory(std::shared_ptr<Screen> screen) {
+		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+		int ctr;
+		int startIdx, endIdx;
+		bool found;
 
-	vector<ll> allocateMemory() {
-		// check if there is enough continuous memory to allocate a process
-		int numFrames = mem_per_proc / mem_per_frame;
-		int ctr = 0;
-		ll start;
-		int startIdx = -1;
-		for (int i = 0; i < memoryFrames.size(); i++) {
-			// if block is free, add to number of frames free
-			if (memoryFrames[i].free) {
-				if (ctr == 0) {
-					start = memoryFrames[i].start;
-					startIdx = i;
-				}
-				ctr++;
-				if (ctr >= numFrames) {
-					int lastIdx = i + 1;
-					for (int j = startIdx; j < lastIdx; j++) {
-						memoryFrames[j].free = false;
+		auto allocateMemoryBlock = [&]() {
+
+			startIdx = -1, endIdx = -1, ctr = 0, found = false;
+
+			for (int i = 0; i < memoryFrames.size(); i++) {
+				if (memoryFrames[i].free) {
+					if (ctr == 0) {
+						startIdx = i;
 					}
-					return { start, memoryFrames[i].end };
+					ctr++;
+
+					if (ctr == mem_to_allocate) {
+						endIdx = i;
+						found = true;
+						break;
+					}
 				}
-				// else reset the counter since there isn't enough space at this location
+				else {
+					ctr = 0;
+					startIdx = -1;
+				}
 			}
-			else {
-				ctr = 0;
-				startIdx = -1;
+			};
+
+		allocateMemoryBlock();
+
+		while (!found) {
+			shared_ptr<Screen> screensToDelete;
+			for (auto it = oldest.begin(); it != oldest.end(); ++it) {
+				shared_ptr<Screen> oldestScreen = *it;
+				if (runningScreens[oldestScreen->getCoreId()] != oldestScreen) {
+					screensToDelete = oldestScreen;
+					break;
+				}
 			}
-		}
-		return { -1, -1 };
-	}
-
-	void printMemory() {
-		lock_guard<mutex> lock(queueMutex);
-		time_t now = time(0);
-		struct tm currentTime;
-		localtime_s(&currentTime, &now);
-		char buffer[80];
-		strftime(buffer, sizeof(buffer), "%m/%d/%Y %I:%M:%S%p", &currentTime);
-		filesystem::path currentPath = filesystem::current_path();
-		string filename = string("memory_stamp_") + to_string(qq) + ".txt";
-		qq++;
-		string outputFileName = (currentPath / filename).string();
-		ofstream outFile(outputFileName);
-		vector<shared_ptr<Screen>> screensorrinsass;
-		for (const auto& screenPtr : procInMem) {
-			if (screenPtr != nullptr) {
-				screensorrinsass.push_back(screenPtr); // Copy the Screen object
+			freeMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+			auto it = find(oldest.begin(), oldest.end(), screensToDelete);
+			if (it != oldest.end()) {
+				oldest.erase(it);
 			}
+			readyQueue.push(screensToDelete);
+			allocateMemoryBlock();
 		}
-		sort(screensorrinsass.begin(), screensorrinsass.end(), [](const shared_ptr<Screen>& a, const shared_ptr<Screen>& b) -> bool {
-			return a->getMemEnd() > b->getMemEnd(); // Dereference shared_ptr to access Screen objects
-			});
-		outFile << "Timestamp: (" << buffer << ")" << endl;
-		outFile << "Number of processes in memory: " << getCoresUsed() << endl;
-		//outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
-		outFile << "---end--- = " << max_overall_mem;
-		for (int i = 0; i < screensorrinsass.size(); i++) {
-
-			// Check if the shared_ptr is nullptr before accessing its methods
-			outFile << endl << endl << screensorrinsass[i]->getMemEnd();     // Print memEnd
-			outFile << endl << screensorrinsass[i]->getProcessName(); // Print screenName
-			outFile << endl << screensorrinsass[i]->getMemStart();    // Print start	
-		}
-
-		outFile << endl << endl << "---start--- = 0";
-		outFile.close();
+		flatMemoryMap[screen] = { startIdx, endIdx };
 	}
 
 };
