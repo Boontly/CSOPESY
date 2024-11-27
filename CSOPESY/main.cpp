@@ -110,6 +110,7 @@ private:
 					for (const auto& [_, sc] : screenList) {
 						if (sc->isFinished()) {
 							finishedScreens.push_back(*sc); // Copy the Screen object
+							cout << endl;
 						}
 					}
 					for (const auto& [id, screenPtr] : scheduler.runningScreens) {

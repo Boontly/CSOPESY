@@ -97,6 +97,10 @@ public:
 		totalLine = other.totalLine;
 		timestamp = other.timestamp;
 		buffer = other.buffer;
+		finished = other.finished;
+		initialized = other.initialized;
+		core_id = other.core_id;
+		memory = other.memory;
 		return *this;
 	}
 
