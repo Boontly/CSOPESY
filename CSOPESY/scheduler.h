@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 using namespace std;
 typedef long long ll;
 
@@ -16,6 +14,7 @@ struct MemoryFrame {
 	int end;
 	bool free;
 };
+
 
 class Scheduler {
 private:
@@ -158,10 +157,17 @@ public:
 
 	void start() {
 		for (int i = 0; i < numCpu; i++) {
-			thread t(&Scheduler::run, this, i);
-			t.detach();
+			if(allocation_type == "flat") {
+				thread t(&Scheduler::runFlat, this, i);
+				t.detach();
+			}
+			else {
+				thread t(&Scheduler::runPaging, this, i);
+				t.detach();
+			}
 		}
 	}
+	
 	void runPaging(int id) {
 		while (true) {
 			shared_ptr<Screen> screen;
@@ -184,7 +190,7 @@ public:
 						continue;
 					}
 					if (screen->isFinished()) {
-						freeMemoryPaging(screen);
+						freeFlatMemoryPaging(screen);
 						delay();
 						break;
 					}
@@ -202,12 +208,60 @@ public:
 					screen->execute();
 					delay();
 				}
-				freeMemoryPaging(screen);
+				freeFlatMemoryPaging(screen);
 			}
 
 		}
 	}
 
+
+	void runFlat(int id) {
+		while (true) {
+			shared_ptr<Screen> screen;
+			{
+				lock_guard<mutex> lock(queueMutex);
+				runningScreens.erase(id);
+				screen = readyQueue.front();
+				if (screen == nullptr) {
+					continue;
+				}
+				readyQueue.pop();
+				allocateFlatMemory(screen);
+			}
+			current_process_task[id] = true;
+			runningScreens[id] = screen;
+			screen->setCoreId(id);
+			if (scheduler == "rr") {
+				for (int i = 0; i < quantumCycles; i++) {
+					if (!current_process_task[id]) {
+						continue;
+					}
+					if (screen->isFinished()) {
+						freeFlatMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+						delay();
+						break;
+					}
+					screen->execute();
+					delay();
+				}
+				if (!screen->isFinished()) {
+
+					lock_guard<mutex> lock(queueMutex);
+					pushQueue(screen);
+				}
+			}
+			else if (scheduler == "fcfs") {
+				while (!screen->isFinished()) {
+					screen->execute();
+					delay();
+				}
+				freeFlatMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+			}
+
+		}
+	}
+
+	/*
 	void run(int id) {
 		int prev_counter = -1;
 		while (true) {
@@ -222,7 +276,7 @@ public:
 				// if readyQ is not empty and there is enough memory
 				// compare number of frames required and number of frames available
 				if (runningScreens[id] != nullptr && runningScreens[id]->isFinished()) {
-					freeMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
+					freeFlatMemory(runningScreens[id]->getMemStart(), runningScreens[id]->getMemEnd());
 					for (int i = 0; i < procInMem.size(); i++) {
 						if (procInMem[i] == runningScreens[id]) {
 							procInMem.erase(procInMem.begin() + i);
@@ -287,6 +341,7 @@ public:
 
 		}
 	}
+	*/
 
 	void delay() {
 		ll ctr = mainCtr;
@@ -302,7 +357,7 @@ public:
 	}
 
 	// paging
-	void freeMemoryPaging(shared_ptr<Screen> screen) {
+	void freeFlatMemoryPaging(shared_ptr<Screen> screen) {
 		map<shared_ptr<Screen>, vector<MemoryFrame>>::iterator it = memoryMap.find(screen);
 		if (it == memoryMap.end()) {
 			return;
@@ -314,16 +369,58 @@ public:
 		memoryMap.erase(it);
 	}
 
+	void removeNameFromFile(const string& nameToRemove) {
+		vector<string> lines; 
+		ifstream inputFile("oldest.txt");
+		
+		if (!inputFile.is_open()) {
+			cerr << "Could not open file for reading." << endl;
+			return;
+		}
+
+		string line;
+		while (getline(inputFile, line)) {
+			if (line != nameToRemove) {
+				lines.push_back(line); 
+			}
+		}
+
+		inputFile.close();
+
+		ofstream outputFile("oldest.txt", ios::trunc);
+		if (!outputFile.is_open()) {
+			cerr << "Could not open file for writing." << endl;
+			return;
+		}
+
+		for (const auto& updatedLine : lines) {
+			outputFile << updatedLine << endl;
+		}
+
+		outputFile.close();
+	}
+
+
+	void putOldestInFile(shared_ptr<Screen> oldest) {
+		ofstream file("oldest.txt", ios::app);
+		if (file.is_open()) {
+			file << oldest->getProcessName() << endl; 
+		}
+		file.close();
+	}
+
 	void allocateMemoryPagingWithInterupt(shared_ptr<Screen> screen) {
 		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
-
+		// check if the object is in oldest.txt
+		removeNameFromFile(screen->getProcessName());
 		while (memoryFrames.size() < mem_to_allocate) {
 			shared_ptr<Screen> oldestScreen = oldest.front();
 			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 				runningScreens.erase(oldestScreen->getCoreId());
 				current_process_task[oldestScreen->getCoreId()] = false;
 			}
-			freeMemoryPaging(oldestScreen);
+			putOldestInFile(oldestScreen);
+			freeFlatMemoryPaging(oldestScreen);
 			oldest.pop_front();
 			readyQueue.push(oldestScreen);
 		}
@@ -334,7 +431,6 @@ public:
 			frame.free = false;
 			memoryMap[screen].push_back(frame);
 		}
-
 		oldest.push_back(screen);
 	}
 
@@ -359,7 +455,7 @@ public:
 			}
 			if (can_delete) {
 				for (auto x : screensToDelete) {
-					freeMemoryPaging(x);
+					freeFlatMemoryPaging(x);
 					auto it = find(oldest.begin(), oldest.end(), x);
 					if (it != oldest.end()) {
 						oldest.erase(it);
@@ -399,10 +495,57 @@ public:
 		}
 	}
 
-	void freeMemory(int start, int end) {
+	void freeFlatMemory(int start, int end) {
 		for (int i = start; i <= end; i++) {
 			memoryFrames[i].free = true;
 		}
+	}
+
+	void allocateFlatMemoryWithInterupt(std::shared_ptr<Screen> screen) {
+		removeNameFromFile(screen->getProcessName());
+		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+		int ctr;
+		int startIdx, endIdx;
+		bool found;
+
+		auto allocateMemoryBlock = [&]() {
+
+			startIdx = -1, endIdx = -1, ctr = 0, found = false;
+
+			for (int i = 0; i < memoryFrames.size(); i++) {
+				if (memoryFrames[i].free) {
+					if (ctr == 0) {
+						startIdx = i;
+					}
+					ctr++;
+
+					if (ctr == mem_to_allocate) {
+						endIdx = i;
+						found = true;
+						break;
+					}
+				}
+				else {
+					ctr = 0;
+					startIdx = -1;
+				}
+			}
+			};
+
+		allocateMemoryBlock();
+
+		while (!found) {
+			shared_ptr<Screen> oldestScreen = oldest.front();
+			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
+				runningScreens.erase(oldestScreen->getCoreId());
+				current_process_task[oldestScreen->getCoreId()] = false;
+			}
+			putOldestInFile(oldestScreen);
+			freeFlatMemoryPaging(oldestScreen);
+			oldest.pop_front();
+			readyQueue.push(oldestScreen);
+		}
+		flatMemoryMap[screen] = { startIdx, endIdx };
 	}
 
 	void allocateFlatMemory(std::shared_ptr<Screen> screen) {
@@ -446,7 +589,7 @@ public:
 					break;
 				}
 			}
-			freeMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+			freeFlatMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
 			auto it = find(oldest.begin(), oldest.end(), screensToDelete);
 			if (it != oldest.end()) {
 				oldest.erase(it);

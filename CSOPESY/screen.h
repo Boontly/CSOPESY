@@ -49,7 +49,6 @@ private:
 	bool finished = false;
 	bool initialized = false;
 	int core_id = -1;
-	Scheduler scheduler;
 
 	stringstream
 		printScreen_helper() {
@@ -69,12 +68,13 @@ private:
 	}
 
 public:
-	int memory = scheduler.getMinMemPerProc() + rand() % ((scheduler.getMaxMemPerProc() + 1) - scheduler.getmin_mem_per_proc());
+	int memory;
 
-	Screen(std::string name, int min, int max)
+	Screen(std::string name, int min, int max, int minMem = 0, int maxMem = 0)
 		: processName(name), currentLine(1), timestamp(time(nullptr)) {
 		srand(static_cast<unsigned int>(time(nullptr)));
 		totalLine = min + rand() % ((max + 1) - min);
+		memory =  minMem + rand() % ((maxMem + 1) - minMem);
 	}
 
 	Screen(const Screen& other) {

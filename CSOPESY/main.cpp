@@ -160,7 +160,7 @@ private:
 					write("This Process is already in use.");
 					return true;
 				}
-				auto sc = make_shared<Screen>(seperatedCommand[2], scheduler.getMinIns(), scheduler.getMaxIns());
+				auto sc = make_shared<Screen>(seperatedCommand[2], scheduler.getMinIns(), scheduler.getMaxIns(), scheduler.getMinMemPerProc(), scheduler.getMaxMemPerProc());
 				screenList[seperatedCommand[2]] = sc;
 				screenList[seperatedCommand[2]]->openScreen();
 				screenList[seperatedCommand[2]]->initialize();
@@ -266,7 +266,7 @@ private:
 					schedulerCtr++;
 				}
 				this_thread::sleep_for(chrono::milliseconds(100));
-				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
+				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns(),scheduler.getMinMemPerProc(), scheduler.getMaxMemPerProc());
 				screenList[processName] = sc;
 				lock_guard<mutex> lock(scheduler.queueMutex);
 				scheduler.pushQueue(sc);

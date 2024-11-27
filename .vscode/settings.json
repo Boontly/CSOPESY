@@ -17,6 +17,9 @@
         "atomic": "cpp",
         "iosfwd": "cpp",
         "filesystem": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "fstream": "cpp",
+        "chrono": "cpp",
+        "ctime": "cpp"
     }
 }
