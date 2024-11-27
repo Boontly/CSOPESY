@@ -1,12 +1,15 @@
 #pragma once
 
+
+
 using namespace std;
 typedef long long ll;
 
+extern volatile ll mainCtr;
 struct MemoryFrame {
-    int start;
+	int start;
 	int end;
-    bool free;
+	bool free;
 };
 
 class Scheduler {
@@ -25,7 +28,7 @@ private:
 	queue<shared_ptr<Screen>> readyQueue;
 	vector<MemoryFrame> memoryFrames;
 	map<int, int> coresUsed;
-	atomic<int> qq =0;
+	atomic<int> qq = 0;
 	vector<shared_ptr<Screen>> procInMem;
 
 
@@ -42,23 +45,32 @@ public:
 			iss >> key >> value;
 			if (key == "num-cpu") {
 				numCpu = stoi(value);
-			} else if (key == "scheduler") {
+			}
+			else if (key == "scheduler") {
 				scheduler = value.substr(1, value.size() - 2);
-			} else if (key == "quantum-cycles") {
+			}
+			else if (key == "quantum-cycles") {
 				quantumCycles = stoull(value);
-			} else if (key == "batch-process-freq") {
+			}
+			else if (key == "batch-process-freq") {
 				batchProcessFrequency = stoull(value);
-			} else if (key == "min-ins") {
+			}
+			else if (key == "min-ins") {
 				minIns = stoi(value);
-			} else if (key == "max-ins") {
+			}
+			else if (key == "max-ins") {
 				maxIns = stoi(value);
-			} else if (key == "delay-per-exec") {
+			}
+			else if (key == "delay-per-exec") {
 				delayPerExec = stoi(value);
-			} else if (key == "max-overall-mem") {
+			}
+			else if (key == "max-overall-mem") {
 				max_overall_mem = stoull(value);
-			} else if (key == "mem-per-frame") {
+			}
+			else if (key == "mem-per-frame") {
 				mem_per_frame = stoull(value);
-			} else if (key == "mem-per-proc") {
+			}
+			else if (key == "mem-per-proc") {
 				mem_per_proc = stoull(value);
 			}
 		}
@@ -71,10 +83,10 @@ public:
 		int totalUsed = 0;
 
 		for (const auto& [coreId, count] : coresUsed) {
-			totalUsed += count; 
+			totalUsed += count;
 		}
 
-		return totalUsed; 
+		return totalUsed;
 	}
 
 	ll getBatchProcessFrequency() {
@@ -104,19 +116,10 @@ public:
 		return delayPerExec;
 	}
 
-	ll getMaxMem(){
+	ll getMaxMem() {
 		return max_overall_mem;
 	};
 
-	ll getExternalFragmentation(){
-		int ctr = 0;
-		for (auto& block : memoryFrames) {
-			if (block.free) {
-				ctr++;
-			}
-		}
-		return ctr * mem_per_frame;
-	}
 
 	bool isInitialized() {
 		return initialized;
@@ -129,10 +132,16 @@ public:
 		}
 	}
 
-	void run(int id) {
+
+
+	void runs(int id) {
+		int prev_counter = -1;
 		while (true) {
 			shared_ptr<Screen> screen;
-
+			if (prev_counter == mainCtr) {
+				continue;
+			}
+			prev_counter = mainCtr;
 			bool memoryAllocated = false;
 			{
 				lock_guard<mutex> lock(queueMutex);
@@ -206,22 +215,75 @@ public:
 		}
 	}
 
-	void delay() {
-		ll ctr = 0;
+	void run(int id) {
 		while (true) {
-			ctr++;
-			if (ctr >= delayPerExec) {
+			shared_ptr<Screen> screen;
+			{
+				lock_guard<mutex> lock(queueMutex);
+				if (!readyQueue.empty()) {
+					screen = readyQueue.front();
+					readyQueue.pop();
+					coresUsed[id] = 1;
+					runningScreens[id] = screen;
+				}
+				else {
+					coresUsed[id] = 0;
+					runningScreens[id] = nullptr;
+					continue;
+				}
+			}
+			screen->setCoreId(id);
+			if (scheduler == "rr") {
+				int prevCtr = -1;
+				int i = 0;
+				while (i < quantumCycles) {
+					if (screen->isFinished()) {
+						delay();
+						break;
+					}
+					if (prevCtr != mainCtr) {
+						prevCtr = mainCtr;
+						screen->execute();
+						delay();
+						i++;
+					}
+				}
+				if (!screen->isFinished()) {
+					lock_guard<mutex> lock(queueMutex);
+					pushQueue(screen);
+				}
+			}
+			else if (scheduler == "fcfs") {
+				while (!screen->isFinished()) {
+					screen->execute();
+					delay();
+				}
+			}
+
+		}
+	}
+
+	void delay() {
+		this_thread::sleep_for(chrono::milliseconds(10));
+		ll ctr = 0;
+		ll prevCtr = -1;
+		while (true) {
+			if (delayPerExec == ctr) {
 				break;
 			}
+			if (prevCtr == mainCtr) {
+				continue;
+			}
+			prevCtr = mainCtr;
+			ctr++;
 		}
-		this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
 	void pushQueue(shared_ptr<Screen> screen) {
 		readyQueue.push(screen);
 	}
 
-	void initMemory(){
+	void initMemory() {
 		// Initialize memory blocks where the first memory block starts from 0 and goes up to max overall mem
 		lock_guard<mutex> lock(queueMutex);
 		int numFrames = max_overall_mem / mem_per_frame;
@@ -263,22 +325,23 @@ public:
 					for (int j = startIdx; j < lastIdx; j++) {
 						memoryFrames[j].free = false;
 					}
-					return {start, memoryFrames[i].end};
+					return { start, memoryFrames[i].end };
 				}
-			// else reset the counter since there isn't enough space at this location
-			} else {
+				// else reset the counter since there isn't enough space at this location
+			}
+			else {
 				ctr = 0;
 				startIdx = -1;
 			}
 		}
-		return {-1, -1};
+		return { -1, -1 };
 	}
 
 	void printMemory() {
 		lock_guard<mutex> lock(queueMutex);
 		time_t now = time(0);
 		struct tm currentTime;
-		localtime_s(&currentTime, &now); 
+		localtime_s(&currentTime, &now);
 		char buffer[80];
 		strftime(buffer, sizeof(buffer), "%m/%d/%Y %I:%M:%S%p", &currentTime);
 		filesystem::path currentPath = filesystem::current_path();
@@ -297,14 +360,14 @@ public:
 			});
 		outFile << "Timestamp: (" << buffer << ")" << endl;
 		outFile << "Number of processes in memory: " << getCoresUsed() << endl;
-		outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
+		//outFile << "Total external fragmentation in KB: " << getExternalFragmentation() << endl << endl;
 		outFile << "---end--- = " << max_overall_mem;
-		for (int i = 0; i < screensorrinsass.size();i++) {
+		for (int i = 0; i < screensorrinsass.size(); i++) {
 
 			// Check if the shared_ptr is nullptr before accessing its methods
-				outFile << endl << endl << screensorrinsass[i]->getMemEnd();     // Print memEnd
-				outFile << endl << screensorrinsass[i]->getProcessName(); // Print screenName
-				outFile << endl << screensorrinsass[i]->getMemStart();    // Print start	
+			outFile << endl << endl << screensorrinsass[i]->getMemEnd();     // Print memEnd
+			outFile << endl << screensorrinsass[i]->getProcessName(); // Print screenName
+			outFile << endl << screensorrinsass[i]->getMemStart();    // Print start	
 		}
 
 		outFile << endl << endl << "---start--- = 0";
@@ -312,4 +375,3 @@ public:
 	}
 
 };
-

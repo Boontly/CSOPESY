@@ -37,7 +37,7 @@ public:
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 	}
-	
+
 };
 
 class Screen : public abstract_screen {
@@ -161,9 +161,7 @@ public:
 		if (currentLine == totalLine) {
 			finished = true;
 		}
-		for (int i = 0; i < 100; i++) {
-			// Do nothing
-		}
+		this_thread::sleep_for(chrono::milliseconds(10));
 	}
 
 	void openScreen() {

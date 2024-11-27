@@ -20,9 +20,22 @@
 #include <chrono>
 #include "screen.h"
 #include "scheduler.h"
-
+CONST ll divide = 1000000;
 using namespace std;
 typedef long long ll;
+
+volatile ll mainCtr = 0;
+mutex ctrMutex;
+
+void runCPU() {
+	while (true) {
+		unique_lock<mutex> lock(ctrMutex);
+		this_thread::sleep_for(chrono::milliseconds(100));
+		mainCtr++;
+		mainCtr = mainCtr % divide;
+		lock.unlock();
+	}
+}
 
 class MainConsole : public abstract_screen {
 private:
@@ -104,8 +117,8 @@ private:
 							processingScreens.push_back(*screenPtr); // Copy the Screen object
 						}
 					}
-					
-					
+
+
 				}
 				write("");
 				write("--------------------------------------");
@@ -216,7 +229,7 @@ private:
 						processingScreens.push_back(*screenPtr); // Copy the Screen object
 					}
 				}
-				}
+			}
 
 			outFile << endl;
 			outFile << "--------------------------------------" << endl;
@@ -235,12 +248,12 @@ private:
 		}
 
 		return true;
-	}
+	}	
 
 	void schedulerTest() {
 		ll freq = scheduler.getBatchProcessFrequency();
 		ll ctr = 1;
-		ll delay = scheduler.getDelayPerExec();
+		int prevCtr = -1;
 		while (scheduleBool) {
 			if (ctr >= freq) {
 				ctr = 1;
@@ -252,11 +265,18 @@ private:
 					}
 					schedulerCtr++;
 				}
+				this_thread::sleep_for(chrono::milliseconds(100));
 				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns());
 				screenList[processName] = sc;
-				scheduler.pushQueue(sc);	
-				this_thread::sleep_for(chrono::milliseconds(100));
-			} else {ctr++;}
+				lock_guard<mutex> lock(scheduler.queueMutex);
+				scheduler.pushQueue(sc);
+			}
+			else {
+				if (prevCtr != mainCtr) {
+					ctr++;
+					prevCtr = mainCtr;
+				}
+			}
 		}
 	}
 
@@ -310,8 +330,6 @@ public:
 
 		continue_program = true;
 		print_header();
-		int ctr = 0;
-		int ctr2 = 0;
 		while (continue_program) {
 			cout << "root:\\> ";
 			getline(cin, user_input);
@@ -327,6 +345,8 @@ public:
 };
 
 signed main() {
+	thread cpuThread(runCPU);
+	cpuThread.detach();
 	MainConsole console;
 	console.run();
 	return 0;
