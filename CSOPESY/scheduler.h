@@ -396,6 +396,7 @@ public:
 				}
 				lock_guard<mutex> lock(memoryMutex);
 				freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+				flatMemoryMap.erase(screen);
 			}
 
 		}
@@ -454,10 +455,13 @@ public:
 				current_process_task[oldestScreen->getCoreId()] = false;
 			}
 			putInBackingStore(oldestScreen);
-			freeMemoryFlat(startIdx, endIdx);
+			freeMemoryFlat(flatMemoryMap[oldestScreen].first, flatMemoryMap[oldestScreen].second);
+			flatMemoryMap.erase(oldestScreen);
 			oldestScreen->memoryAllocated = false;
 			oldest.pop_front();
+			allocateMemoryBlock();
 		}
+
 		flatMemoryMap[screen] = { startIdx, endIdx };
 		occupyMemoryFlat(startIdx, endIdx);
 	}
