@@ -40,7 +40,7 @@ private:
 	string allocation_type = "paging";
 	deque<shared_ptr<Screen>> oldest;
 	map<int, atomic<bool>> current_process_task;
-
+	vector<bool> flatMemoryArray;
 
 public:
 	mutex queueMutex;
@@ -90,7 +90,11 @@ public:
 		}
 		file.close();
 		allocation_type = (maxOverallMem == memPerFrame) ? "flat" : "paging";
-		initMemory();
+		if(allocation_type == "flat") {
+			initFlatMemory();
+		}else{
+			initMemory();
+		}	
 		createBackingStore();
 		start();
 		initialized = true;
@@ -183,6 +187,13 @@ public:
 			frame.free = true;
 			memoryFrames.push_back(frame);
 		}
+	}
+
+
+	void initFlatMemory(){
+		lock_guard<mutex> lock(memoryMutex);
+		flatMemoryArray.clear();
+		flatMemoryArray.resize(maxOverallMem, true);
 	}
 
 	void start() {
@@ -404,13 +415,13 @@ public:
 
 	void freeMemoryFlat(int start, int end) {
 		for (int i = start; i <= end; i++) {
-			memoryFrames[i].free = true;
+			flatMemoryArray[i] = true;
 		}
 	}
 
 	void occupyMemoryFlat(int start, int end) {
 		for (int i = start; i <= end; i++) {
-			memoryFrames[i].free = false;
+			flatMemoryArray[i] = false;
 		}
 	}
 
@@ -444,7 +455,7 @@ public:
 					startIdx = -1;
 				}
 			}
-			};
+		};
 
 		allocateMemoryBlock();
 
