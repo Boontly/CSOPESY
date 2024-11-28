@@ -279,9 +279,6 @@ public:
 			}
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
-					if (!current_process_task[id]) {
-						continue;
-					}
 					screen->execute();
 					if (screen->isFinished()) {
 						{
@@ -291,11 +288,14 @@ public:
 							if (it != oldest.end()) {
 								oldest.erase(it);
 							}
+							delay();
+							break;
 						}
-						delay();
-						break;
 					}
 					delay();
+					if (!current_process_task[id]) {
+						continue;
+					}
 				}
 				if (!screen->isFinished()) {
 					lock_guard<mutex> lock(queueMutex);
@@ -304,11 +304,24 @@ public:
 			}
 			else if (scheduler == "fcfs") {
 				while (!screen->isFinished()) {
+					if (!current_process_task[id]) {
+						lock_guard<mutex> lock(queueMutex);
+						pushQueue(screen);
+						delay();
+						break;
+					}
 					screen->execute();
 					delay();
 				}
-				lock_guard <mutex> lock(memoryMutex);
-				freeMemoryPaging(screen);
+				if (current_process_task[id]) {
+					lock_guard <mutex> lock(memoryMutex);
+					freeMemoryPaging(screen);
+					auto it = find(oldest.begin(), oldest.end(), screen);
+					if (it != oldest.end()) {
+						oldest.erase(it);
+					}
+				}
+
 			}
 
 		}
@@ -402,12 +415,23 @@ public:
 			}
 			else if (scheduler == "fcfs") {
 				while (!screen->isFinished()) {
+					if (!current_process_task[id]) {
+						lock_guard<mutex> lock(queueMutex);
+						pushQueue(screen);
+						break;
+					}
 					screen->execute();
 					delay();
 				}
-				lock_guard<mutex> lock(memoryMutex);
-				freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
-				flatMemoryMap.erase(screen);
+				if (current_process_task[id]) {
+					lock_guard<mutex> lock(memoryMutex);
+					freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+					auto it = find(oldest.begin(), oldest.end(), screen);
+					if (it != oldest.end()) {
+						oldest.erase(it);
+					}
+					flatMemoryMap.erase(screen);
+				}
 			}
 
 		}
@@ -437,8 +461,8 @@ public:
 
 			startIdx = -1, endIdx = -1, ctr = 0, found = false;
 
-			for (int i = 0; i < memoryFrames.size(); i++) {
-				if (memoryFrames[i].free) {
+			for (int i = 0; i < flatMemoryArray.size(); i++) {
+				if (flatMemoryArray[i]) {
 					if (ctr == 0) {
 						startIdx = i;
 					}

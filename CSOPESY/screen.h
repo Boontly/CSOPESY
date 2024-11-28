@@ -49,6 +49,7 @@ private:
 	bool finished = false;
 	bool initialized = false;
 	int core_id = -1;
+	mutex screen_mutex;
 
 
 	stringstream
@@ -165,6 +166,7 @@ public:
 	}
 
 	void execute() {
+		lock_guard<mutex> lock(screen_mutex);
 		currentLine++;
 		if (currentLine == totalLine) {
 			finished = true;
