@@ -174,7 +174,7 @@ public:
 
 	void initMemory() {
 		// Initialize memory blocks where the first memory block starts from 0 and goes up to max overall mem
-		lock_guard<mutex> lock(queueMutex);
+		lock_guard<mutex> lock(memoryMutex);
 		int numFrames = maxOverallMem / memPerFrame;
 		for (int i = 0; i < numFrames; i++) {
 			MemoryFrame frame;
@@ -244,7 +244,12 @@ public:
 	}
 
 	void runPaging(int id) {
+		int prevCtr = -1;
 		while (true) {
+			if (prevCtr == mainCtr) {
+				continue;
+			}
+			prevCtr = mainCtr;
 			shared_ptr<Screen> screen;
 			{
 				lock_guard<mutex> lock(queueMutex);
@@ -270,7 +275,10 @@ public:
 						{
 							lock_guard <mutex> lock(memoryMutex);
 							freeMemoryPaging(screen);
-							oldest.erase(remove(oldest.begin(), oldest.end(), screen), oldest.end());
+							auto it = find(oldest.begin(), oldest.end(), screen);
+							if (it != oldest.end()) {
+								oldest.erase(it);
+							}
 						}
 						delay();
 						break;
@@ -315,7 +323,6 @@ public:
 			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 				runningScreens.erase(oldestScreen->getCoreId());
 				current_process_task[oldestScreen->getCoreId()] = false;
-				// smth wrong here
 			}
 			putInBackingStore(oldestScreen);
 			freeMemoryPaging(oldestScreen);
