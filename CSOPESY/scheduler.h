@@ -451,7 +451,7 @@ public:
 
 	void allocateMemoryFlatWithInterupt(std::shared_ptr<Screen> screen) {
 		lock_guard<mutex> lock(memoryMutex);
-		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+		ll mem_to_allocate = memPerFrame;
 		removeFromBackingStore(screen->getProcessName());
 		int ctr;
 		int startIdx, endIdx;
@@ -499,6 +499,7 @@ public:
 
 		flatMemoryMap[screen] = { startIdx, endIdx };
 		occupyMemoryFlat(startIdx, endIdx);
+		oldest.push_back(screen);
 	}
 
 
