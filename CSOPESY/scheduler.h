@@ -254,6 +254,7 @@ public:
 			{
 				lock_guard<mutex> lock(queueMutex);
 				if (readyQueue.empty()) {
+					runningScreens.erase(id);
 					continue;
 				}
 				screen = readyQueue.front();
