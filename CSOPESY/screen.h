@@ -50,6 +50,7 @@ private:
 	bool initialized = false;
 	int core_id = -1;
 
+
 	stringstream
 		printScreen_helper() {
 		stringstream ss;
@@ -69,6 +70,7 @@ private:
 
 public:
 	int memory;
+	int memoryAllocated = false;
 
 	Screen(std::string name, int min, int max, int minMem = 0, int maxMem = 0)
 		: processName(name), currentLine(1), timestamp(time(nullptr)) {
@@ -86,6 +88,7 @@ public:
 		initialized = other.initialized;
 		core_id = other.core_id;
 		memory = other.memory;
+		memoryAllocated = other.memoryAllocated;
 
 	}
 
@@ -101,6 +104,7 @@ public:
 		initialized = other.initialized;
 		core_id = other.core_id;
 		memory = other.memory;
+		memoryAllocated = other.memoryAllocated;
 		return *this;
 	}
 

@@ -253,24 +253,24 @@ public:
 				}
 				screen = readyQueue.front();
 				readyQueue.pop();
-				allocateMemoryPagingWithInterupt(screen);
+				if (screen->memoryAllocated == false) {
+					allocateMemoryPagingWithInterupt(screen);
+				}
 				current_process_task[id] = true;
 				runningScreens[id] = screen;
 				screen->setCoreId(id);
 			}
 			if (scheduler == "rr") {
-				for (int i = 0; i < quantumCycles; i++) {;
+				for (int i = 0; i < quantumCycles; i++) {
 					if (!current_process_task[id]) {
 						continue;
 					}
 					screen->execute();
 					if (screen->isFinished()) {
 						{
-							cout << screen->getProcessName() << id << screen->getCurrentLine() << endl;
 							lock_guard <mutex> lock(memoryMutex);
 							freeMemoryPaging(screen);
 							oldest.erase(remove(oldest.begin(), oldest.end(), screen), oldest.end());
-
 						}
 						delay();
 						break;
@@ -313,13 +313,14 @@ public:
 		while (memoryFrames.size() < mem_to_allocate) {
 			shared_ptr<Screen> oldestScreen = oldest.front();
 			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
-				cout << "oldestScreen: " << oldestScreen->getProcessName() << endl;
 				runningScreens.erase(oldestScreen->getCoreId());
 				current_process_task[oldestScreen->getCoreId()] = false;
+				// smth wrong here
 			}
 			putInBackingStore(oldestScreen);
 			freeMemoryPaging(oldestScreen);
-			readyQueue.push(oldestScreen);
+			oldestScreen->memoryAllocated = false;
+			oldest.pop_front();
 		}
 
 		while (mem_to_allocate-- > 0) {
@@ -328,7 +329,7 @@ public:
 			frame.free = false;
 			memoryMap[screen].push_back(frame);
 		}
-
+		screen->memoryAllocated = true;
 		oldest.push_back(screen);
 	}
 

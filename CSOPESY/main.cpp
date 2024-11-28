@@ -118,8 +118,6 @@ private:
 							processingScreens.push_back(*screenPtr); // Copy the Screen object
 						}
 					}
-
-
 				}
 				write("");
 				write("--------------------------------------");
