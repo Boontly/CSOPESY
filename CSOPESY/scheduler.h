@@ -405,7 +405,9 @@ public:
 		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
 		removeFromBackingStore(screen->getProcessName());
 		while (memoryFrames.size() < mem_to_allocate) {
-			if (!oldest.empty()) {
+			if (oldest.empty()) {
+				return false;
+			}
 			shared_ptr<Screen> oldestScreen = oldest.front();
 				if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 					runningScreens.erase(oldestScreen->getCoreId());
@@ -416,10 +418,6 @@ public:
 				freeMemoryPaging(oldestScreen);
 				oldestScreen->memoryAllocated = false;
 				oldest.pop_front();
-			}
-			else {
-				return false;
-			}
 		}
 
 		while (mem_to_allocate-- > 0) {
@@ -474,7 +472,9 @@ public:
 				readyQueue.pop_front();
 				if (!screen->memoryAllocated) {
 					if (scheduler == "rr") {
-						allocateMemoryFlatWithInterupt(screen);
+						if (!allocateMemoryFlatWithInterupt(screen)) {
+							continue;
+						}
 					} else if (!allocateMemoryFlatFCFS(screen)) {
 						readyQueue.push_front(screen);
 						continue;
@@ -547,7 +547,7 @@ public:
 		}
 	}
 
-	void allocateMemoryFlatWithInterupt(std::shared_ptr<Screen> screen) {
+	bool allocateMemoryFlatWithInterupt(std::shared_ptr<Screen> screen) {
 		lock_guard<mutex> lock(memoryMutex);
 		ll mem_to_allocate = memPerFrame;
 		removeFromBackingStore(screen->getProcessName());
@@ -582,6 +582,9 @@ public:
 		allocateMemoryBlock();
 
 		while (!found) {
+			if (!oldest.empty()) {
+				return false;
+			}
 			shared_ptr<Screen> oldestScreen = oldest.front();
 			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 				runningScreens.erase(oldestScreen->getCoreId());
@@ -599,6 +602,7 @@ public:
 		flatMemoryMap[screen] = { startIdx, endIdx };
 		occupyMemoryFlat(startIdx, endIdx);
 		oldest.push_back(screen);
+		return true;
 	}
 
 	bool allocateMemoryFlatFCFS(std::shared_ptr<Screen> screen) {
