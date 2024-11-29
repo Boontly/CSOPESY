@@ -71,7 +71,8 @@ private:
 
 public:
 	int memory;
-	int memoryAllocated = false;
+	bool memoryAllocated = false;
+	int allocatedMemory = 0;
 
 	Screen(std::string name, int min, int max, int minMem = 0, int maxMem = 0)
 		: processName(name), currentLine(1), timestamp(time(nullptr)) {

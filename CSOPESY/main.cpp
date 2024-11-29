@@ -59,7 +59,7 @@ private:
 	}
 
 	bool mainMenuCommand(vector<string> seperatedCommand, string command_to_check) {
-		const set<string> commands = { "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit" };
+		const set<string> commands = { "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util", "clear", "exit", "vmstat", "process-smi"};
 
 		if (!commands.count(seperatedCommand[0])) {
 			commandNotRecognize(command_to_check);
@@ -94,12 +94,45 @@ private:
 				invalidCommand(command_to_check);
 				return true;
 			}
+			lock_guard<mutex> lock(scheduler.queueMutex);
 			write(string(50, '-'));
-			cout << endl;
-			write("Virtual Memory Statistics (vmstat)\n");
-			//print a long -
+			write("Virtual Memory Statistics (vmstat)");
 			write(string(50, '-'));
-			cout << endl;
+			write("Total Memory: " + to_string(scheduler.getMaxMem()));
+			write("Used Memory: " + to_string(scheduler.getUsedMem()));
+			write("Free Memory: " + to_string(scheduler.getFreeMem()));
+			write("");
+			ll currMainCtr = mainCtr;
+			ll idleTicks = scheduler.getIdleTicks();
+			write("Idle CPU Ticks: " + to_string(idleTicks));
+			write("Active CPU Ticks: " + to_string(currMainCtr -idleTicks));
+			write("Total CPU Ticks: " + to_string(currMainCtr));
+			write("");
+			write("Num Paged in: " + to_string(scheduler.getPagesIn()));
+			write("Num Paged out: " + to_string(scheduler.getPagesOut()));
+		}
+		else if (seperatedCommand[0] == "process-smi") {
+			if (!(seperatedCommand.size() == 1)) {
+				invalidCommand(command_to_check);
+				return true;
+			}
+			lock_guard<mutex> lock(scheduler.queueMutex);
+			write(string(50, '-'));
+			write(" | PROCESS-SMI V01.00 Driver Version: 01.00 | ");
+			write(string(50, '-'));
+			write("CPU-Util: " + scheduler.getCpuUtilization());
+			write("Memory Usage: " + to_string(scheduler.getUsedMem()) + "/" + to_string(scheduler.getMaxMem()) + " MB");
+			write("Memory-Util: " + to_string(scheduler.getUsedMem() / scheduler.getMaxMem() * 100) + "%");
+			write("");
+			write(string(50, '='));
+			write("Running processes and memory usage:");
+			write(string(50, '-'));
+			for (const auto& [id, screenPtr] : scheduler.runningScreens) {
+				if (screenPtr != nullptr) {
+					write(screenPtr->getProcessName() + " " + to_string(screenPtr->allocatedMemory));
+				}
+			}
+			write(string(50, '-'));
 		}
 		
 

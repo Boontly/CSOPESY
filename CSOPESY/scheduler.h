@@ -41,6 +41,9 @@ private:
 	deque<shared_ptr<Screen>> oldest;
 	map<int, atomic<bool>> current_process_task;
 	vector<bool> flatMemoryArray;
+	atomic<int> idleCPUTicks=0;
+	atomic<int> pagesIn = 0;
+	atomic<int> pagesOut = 0;
 
 public:
 	mutex queueMutex;
@@ -152,6 +155,29 @@ public:
 	ll getMaxMem() {
 		return maxOverallMem;
 	};
+	
+	ll getUsedMem() {
+		ll usedMem = 0; 
+
+		if (allocation_type == "flat") {
+			for (int i = 0; i < flatMemoryArray.size(); i++) {
+				if (!flatMemoryArray[i]) { 
+					usedMem += 1; 
+				}
+			}
+			return usedMem;
+		}
+		return maxOverallMem - getFreeMem();
+	}
+
+	ll getFreeMem() {
+		if (allocation_type == "flat") {
+			return maxOverallMem - getUsedMem();
+		}
+		return memoryFrames.size() * memPerFrame;
+	}
+
+
 	ll getExternalFragmentation() {
 		int ctr = 0;
 		for (auto& block : memoryFrames) {
@@ -160,6 +186,14 @@ public:
 			}
 		}
 		return ctr * memPerFrame;
+	}
+
+	ll getPagesIn() {
+		return pagesIn;
+	}
+
+	ll getPagesOut() {
+		return pagesOut;
 	}
 
 	bool isInitialized() {
@@ -205,6 +239,27 @@ public:
 				t.detach();
 			}
 		}
+		thread t(&Scheduler::CPUcounter, this);
+		t.detach();
+		
+	}
+
+	void CPUcounter() {
+		ll prevCtr = -1;
+		idleCPUTicks = mainCtr-1;
+		while (true) {
+			if (prevCtr == mainCtr) {
+				continue;
+			}
+			prevCtr = mainCtr;
+			if (runningScreens.empty()) {
+				idleCPUTicks++;
+			}
+		}
+	}
+	
+	ll getIdleTicks() {
+		return idleCPUTicks;
 	}
 
 	void pushQueue(shared_ptr<Screen> screen) {
@@ -253,7 +308,7 @@ public:
 	}
 
 	void runPaging(int id) {
-		int prevCtr = -1;
+		ll prevCtr = -1;
 		while (true) {
 			if (prevCtr == mainCtr) {
 				continue;
@@ -264,6 +319,7 @@ public:
 				lock_guard<mutex> lock(queueMutex);
 				if (readyQueue.empty()) {
 					runningScreens.erase(id);
+					coresUsed[id] = 0;
 					continue;
 				}
 				screen = readyQueue.front();
@@ -279,6 +335,7 @@ public:
 				current_process_task[id] = true;
 				runningScreens[id] = screen;
 				screen->setCoreId(id);
+				coresUsed[id] = 1;
 			}
 
 			if (scheduler == "rr") {
@@ -328,6 +385,7 @@ public:
 	}
 
 	void freeMemoryPaging(shared_ptr<Screen> screen) {
+		screen->allocatedMemory = 0;
 		map<shared_ptr<Screen>, vector<MemoryFrame>>::iterator it = memoryMap.find(screen);
 		if (it == memoryMap.end()) {
 			return;
@@ -335,6 +393,7 @@ public:
 		vector<MemoryFrame> frames = memoryMap[screen];
 		for (auto& frame : frames) {
 			memoryFrames.push_back(frame);
+			pagesOut++;
 		}
 		memoryMap.erase(it);
 	}
@@ -347,6 +406,7 @@ public:
 			shared_ptr<Screen> oldestScreen = oldest.front();
 			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 				runningScreens.erase(oldestScreen->getCoreId());
+				coresUsed[oldestScreen->getCoreId()] = 0;
 				current_process_task[oldestScreen->getCoreId()] = false;
 			}
 			putInBackingStore(oldestScreen);
@@ -360,6 +420,8 @@ public:
 			memoryFrames.pop_front();
 			frame.free = false;
 			memoryMap[screen].push_back(frame);
+			pagesIn++;
+			screen->allocatedMemory += memPerFrame;
 		}
 		screen->memoryAllocated = true;
 		oldest.push_back(screen);
@@ -385,7 +447,7 @@ public:
 	}
 
 	void runFlat(int id) {
-		int prevCtr = -1;
+		ll prevCtr = -1;
 
 		while (true) {
 			if (prevCtr == mainCtr) {
@@ -397,6 +459,7 @@ public:
 				lock_guard<mutex> lock(queueMutex);
 				if (readyQueue.empty()) {
 					runningScreens.erase(id);
+					coresUsed[id] = 0;
 					continue;
 				}
 				screen = readyQueue.front();
@@ -412,6 +475,7 @@ public:
 				current_process_task[id] = true;
 				runningScreens[id] = screen;
 				screen->setCoreId(id);
+				coresUsed[id] = 1;
 			}
 
 			if (scheduler == "rr") {
@@ -426,7 +490,7 @@ public:
 						{
 							lock_guard<mutex> lock(memoryMutex);
 							freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
-
+							screen->allocatedMemory = 0;
 							auto it = find(oldest.begin(), oldest.end(), screen);
 							if (it != oldest.end()) {
 								oldest.erase(it);
@@ -451,7 +515,7 @@ public:
 
 				lock_guard<mutex> lock(memoryMutex);
 				freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
-
+				screen->allocatedMemory = 0;
 				auto it = find(oldest.begin(), oldest.end(), screen);
 				if (it != oldest.end()) {
 					oldest.erase(it);
@@ -517,12 +581,13 @@ public:
 			}
 			putInBackingStore(oldestScreen);
 			freeMemoryFlat(flatMemoryMap[oldestScreen].first, flatMemoryMap[oldestScreen].second);
+			oldestScreen->allocatedMemory = 0;
 			flatMemoryMap.erase(oldestScreen);
 			oldestScreen->memoryAllocated = false;
 			oldest.pop_front();
 			allocateMemoryBlock();
 		}
-
+		screen->allocatedMemory = mem_to_allocate;
 		flatMemoryMap[screen] = { startIdx, endIdx };
 		occupyMemoryFlat(startIdx, endIdx);
 		oldest.push_back(screen);
