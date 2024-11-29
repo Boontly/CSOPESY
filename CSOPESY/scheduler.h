@@ -405,8 +405,8 @@ public:
 		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
 		removeFromBackingStore(screen->getProcessName());
 		while (memoryFrames.size() < mem_to_allocate) {
+			if (!oldest.empty()) {
 			shared_ptr<Screen> oldestScreen = oldest.front();
-			if (oldestScreen) {
 				if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
 					runningScreens.erase(oldestScreen->getCoreId());
 					coresUsed[oldestScreen->getCoreId()] = 0;
