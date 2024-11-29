@@ -315,7 +315,7 @@ private:
 					}
 					schedulerCtr++;
 				}
-				this_thread::sleep_for(chrono::milliseconds(100));
+				this_thread::sleep_for(chrono::milliseconds(400));
 				auto sc = make_shared<Screen>(processName, scheduler.getMinIns(), scheduler.getMaxIns(),scheduler.getMinMemPerProc(), scheduler.getMaxMemPerProc());
 				screenList[processName] = sc;
 				lock_guard<mutex> lock(scheduler.queueMutex);
