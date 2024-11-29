@@ -30,7 +30,7 @@ private:
 	ll minMemPerProc;
 	ll maxMemPerProc;
 	bool initialized = false;
-	queue<shared_ptr<Screen>> readyQueue;
+	deque<shared_ptr<Screen>> readyQueue;
 	deque<MemoryFrame> memoryFrames;
 	map<int, int> coresUsed;
 	atomic<int> qq = 0;
@@ -162,7 +162,6 @@ public:
 		return ctr * memPerFrame;
 	}
 
-
 	bool isInitialized() {
 		return initialized;
 	}
@@ -189,7 +188,6 @@ public:
 		}
 	}
 
-
 	void initFlatMemory(){
 		lock_guard<mutex> lock(memoryMutex);
 		flatMemoryArray.clear();
@@ -210,7 +208,7 @@ public:
 	}
 
 	void pushQueue(shared_ptr<Screen> screen) {
-		readyQueue.push(screen);
+		readyQueue.push_back(screen);
 	}
 
 	void removeFromBackingStore(const string& nameToRemove) {
@@ -269,61 +267,63 @@ public:
 					continue;
 				}
 				screen = readyQueue.front();
-				readyQueue.pop();
-				if (screen->memoryAllocated == false) {
-					allocateMemoryPagingWithInterupt(screen);
+				readyQueue.pop_front();
+				if (!screen->memoryAllocated) {
+					if (scheduler == "rr") {
+						allocateMemoryPagingWithInterupt(screen);
+					} else if (!allocateMemoryPagingFCFS(screen)) {
+						readyQueue.push_front(screen);
+						continue;
+					}
 				}
 				current_process_task[id] = true;
 				runningScreens[id] = screen;
 				screen->setCoreId(id);
 			}
+
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
 					screen->execute();
+
 					if (screen->isFinished()) {
 						{
-							lock_guard <mutex> lock(memoryMutex);
+							lock_guard<mutex> lock(memoryMutex);
 							freeMemoryPaging(screen);
 							auto it = find(oldest.begin(), oldest.end(), screen);
 							if (it != oldest.end()) {
 								oldest.erase(it);
 							}
-							delay();
-							break;
 						}
+						delay();
+						break;
 					}
+
 					delay();
+
 					if (!current_process_task[id]) {
-						continue;
+						break;
 					}
 				}
+
 				if (!screen->isFinished()) {
 					lock_guard<mutex> lock(queueMutex);
 					pushQueue(screen);
 				}
 			}
 			else if (scheduler == "fcfs") {
+
 				while (!screen->isFinished()) {
-					if (!current_process_task[id]) {
-						lock_guard<mutex> lock(queueMutex);
-						pushQueue(screen);
-						delay();
-						break;
-					}
 					screen->execute();
 					delay();
 				}
-				if (current_process_task[id]) {
-					lock_guard <mutex> lock(memoryMutex);
-					freeMemoryPaging(screen);
-					auto it = find(oldest.begin(), oldest.end(), screen);
-					if (it != oldest.end()) {
-						oldest.erase(it);
-					}
+
+				lock_guard<mutex> lock(memoryMutex);
+				freeMemoryPaging(screen);
+				auto it = find(oldest.begin(), oldest.end(), screen);
+				if (it != oldest.end()) {
+					oldest.erase(it);
 				}
-
 			}
-
 		}
 	}
 
@@ -365,8 +365,28 @@ public:
 		oldest.push_back(screen);
 	}
 
+	bool allocateMemoryPagingFCFS(shared_ptr<Screen> screen) {
+		lock_guard<mutex> lock(memoryMutex);
+		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
+
+		if(memoryFrames.size() < mem_to_allocate) {
+			return false;
+		}
+		
+		while (mem_to_allocate-- > 0) {
+			MemoryFrame frame = memoryFrames.front();
+			memoryFrames.pop_front();
+			frame.free = false;
+			memoryMap[screen].push_back(frame);
+		}
+		screen->memoryAllocated = true;
+		oldest.push_back(screen);
+		return true;
+	}
+
 	void runFlat(int id) {
 		int prevCtr = -1;
+
 		while (true) {
 			if (prevCtr == mainCtr) {
 				continue;
@@ -380,24 +400,33 @@ public:
 					continue;
 				}
 				screen = readyQueue.front();
-				readyQueue.pop();
-				if (screen->memoryAllocated == false) {
-					allocateMemoryFlatWithInterupt(screen);
+				readyQueue.pop_front();
+				if (!screen->memoryAllocated) {
+					if (scheduler == "rr") {
+						allocateMemoryFlatWithInterupt(screen);
+					} else if (!allocateMemoryFlatFCFS(screen)) {
+						readyQueue.push_front(screen);
+						continue;
+					}
 				}
 				current_process_task[id] = true;
 				runningScreens[id] = screen;
 				screen->setCoreId(id);
-			}	
+			}
+
 			if (scheduler == "rr") {
 				for (int i = 0; i < quantumCycles; i++) {
 					if (!current_process_task[id]) {
-						continue;
+						continue; 
 					}
+
 					screen->execute();
+
 					if (screen->isFinished()) {
 						{
 							lock_guard<mutex> lock(memoryMutex);
 							freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+
 							auto it = find(oldest.begin(), oldest.end(), screen);
 							if (it != oldest.end()) {
 								oldest.erase(it);
@@ -413,29 +442,26 @@ public:
 					pushQueue(screen);
 				}
 			}
+
 			else if (scheduler == "fcfs") {
 				while (!screen->isFinished()) {
-					if (!current_process_task[id]) {
-						lock_guard<mutex> lock(queueMutex);
-						pushQueue(screen);
-						break;
-					}
 					screen->execute();
 					delay();
 				}
-				if (current_process_task[id]) {
-					lock_guard<mutex> lock(memoryMutex);
-					freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
-					auto it = find(oldest.begin(), oldest.end(), screen);
-					if (it != oldest.end()) {
-						oldest.erase(it);
-					}
-					flatMemoryMap.erase(screen);
-				}
-			}
 
+				lock_guard<mutex> lock(memoryMutex);
+				freeMemoryFlat(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
+
+				auto it = find(oldest.begin(), oldest.end(), screen);
+				if (it != oldest.end()) {
+					oldest.erase(it);
+				}
+
+				flatMemoryMap.erase(screen);
+			}
 		}
 	}
+
 
 	void freeMemoryFlat(int start, int end) {
 		for (int i = start; i <= end; i++) {
@@ -502,70 +528,10 @@ public:
 		oldest.push_back(screen);
 	}
 
+	bool allocateMemoryFlatFCFS(std::shared_ptr<Screen> screen) {
+		lock_guard<mutex> lock(memoryMutex);
+		ll mem_to_allocate = memPerFrame;
 
-
-
-
-
-
-
-	/* bool allocateMemoryPaging(shared_ptr<Screen> screen) {
-		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
-		ll freed = 0;
-		bool can_delete = false;
-
-		vector<shared_ptr<Screen>> screensToDelete;
-
-		if (mem_to_allocate > memoryFrames.size()) {
-			lock_guard<mutex> lock(memoryMutex);
-			for (auto it = oldest.begin(); it != oldest.end(); ++it) {
-				shared_ptr<Screen> oldestScreen = *it;
-				if (!runningScreens.count(oldestScreen->getCoreId())) {
-					screensToDelete.push_back(oldestScreen);
-					freed += safeCeil(oldestScreen->memory, memPerFrame);
-					if (freed + memoryFrames.size() >= mem_to_allocate) {
-						can_delete = true;
-						break;
-					}
-				}
-			}
-			if (can_delete) {
-				for (auto x : screensToDelete) {
-					freeMemoryPaging(x);
-					auto it = find(oldest.begin(), oldest.end(), x);
-					if (it != oldest.end()) {
-						oldest.erase(it);
-					}
-					readyQueue.push(x);
-				}
-			}
-			else {
-				readyQueue.push(screen);
-				return false;
-			}
-		}
-
-		while (mem_to_allocate-- > 0) {
-			MemoryFrame frame = memoryFrames.front();
-			memoryFrames.pop_front();
-			frame.free = false;
-			memoryMap[screen].push_back(frame);
-		}
-
-		oldest.push_back(screen);
-		return true;
-	}
-	*/
-	// pagign end here
-
-
-
-
-
-	/*
-
-	void allocateFlatMemory(std::shared_ptr<Screen> screen) {
-		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
 		int ctr;
 		int startIdx, endIdx;
 		bool found;
@@ -574,8 +540,8 @@ public:
 
 			startIdx = -1, endIdx = -1, ctr = 0, found = false;
 
-			for (int i = 0; i < memoryFrames.size(); i++) {
-				if (memoryFrames[i].free) {
+			for (int i = 0; i < flatMemoryArray.size(); i++) {
+				if (flatMemoryArray[i]) {
 					if (ctr == 0) {
 						startIdx = i;
 					}
@@ -592,29 +558,18 @@ public:
 					startIdx = -1;
 				}
 			}
-			};
+		};
 
 		allocateMemoryBlock();
 
-		while (!found) {
-			shared_ptr<Screen> screensToDelete;
-			for (auto it = oldest.begin(); it != oldest.end(); ++it) {
-				shared_ptr<Screen> oldestScreen = *it;
-				if (runningScreens[oldestScreen->getCoreId()] != oldestScreen) {
-					screensToDelete = oldestScreen;
-					break;
-				}
-			}
-			freeFlatMemory(flatMemoryMap[screen].first, flatMemoryMap[screen].second);
-			auto it = find(oldest.begin(), oldest.end(), screensToDelete);
-			if (it != oldest.end()) {
-				oldest.erase(it);
-			}
-			readyQueue.push(screensToDelete);
-			allocateMemoryBlock();
+		if(!found) {
+			return false;
 		}
+
 		flatMemoryMap[screen] = { startIdx, endIdx };
+		occupyMemoryFlat(startIdx, endIdx);
+		oldest.push_back(screen);
+		return true;
 	}
-	*/
 
 };

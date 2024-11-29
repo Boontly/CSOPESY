@@ -88,6 +88,21 @@ private:
 			write("Configuration initialized.");
 		}
 
+		
+		else if(seperatedCommand[0] == "vmstat") {
+			if (!(seperatedCommand.size() == 1)) {
+				invalidCommand(command_to_check);
+				return true;
+			}
+			write(string(50, '-'));
+			cout << endl;
+			write("Virtual Memory Statistics (vmstat)\n");
+			//print a long -
+			write(string(50, '-'));
+			cout << endl;
+		}
+		
+
 		else if (seperatedCommand[0] == "screen") {
 			if (seperatedCommand.size() < 2 || seperatedCommand.size() > 3) {
 				invalidCommand(command_to_check);
