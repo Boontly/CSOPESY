@@ -326,7 +326,9 @@ public:
 				readyQueue.pop_front();
 				if (!screen->memoryAllocated) {
 					if (scheduler == "rr") {
-						allocateMemoryPagingWithInterupt(screen);
+						if (!allocateMemoryPagingWithInterupt(screen)) {
+							continue;
+						}
 					} else if (!allocateMemoryPagingFCFS(screen)) {
 						readyQueue.push_front(screen);
 						continue;
@@ -398,21 +400,26 @@ public:
 		memoryMap.erase(it);
 	}
 
-	void allocateMemoryPagingWithInterupt(shared_ptr<Screen> screen) {
+	bool allocateMemoryPagingWithInterupt(shared_ptr<Screen> screen) {
 		lock_guard<mutex> lock(memoryMutex);
 		ll mem_to_allocate = safeCeil(screen->memory, memPerFrame);
 		removeFromBackingStore(screen->getProcessName());
 		while (memoryFrames.size() < mem_to_allocate) {
 			shared_ptr<Screen> oldestScreen = oldest.front();
-			if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
-				runningScreens.erase(oldestScreen->getCoreId());
-				coresUsed[oldestScreen->getCoreId()] = 0;
-				current_process_task[oldestScreen->getCoreId()] = false;
+			if (oldestScreen) {
+				if (runningScreens[oldestScreen->getCoreId()] == oldestScreen) {
+					runningScreens.erase(oldestScreen->getCoreId());
+					coresUsed[oldestScreen->getCoreId()] = 0;
+					current_process_task[oldestScreen->getCoreId()] = false;
+				}
+				putInBackingStore(oldestScreen);
+				freeMemoryPaging(oldestScreen);
+				oldestScreen->memoryAllocated = false;
+				oldest.pop_front();
 			}
-			putInBackingStore(oldestScreen);
-			freeMemoryPaging(oldestScreen);
-			oldestScreen->memoryAllocated = false;
-			oldest.pop_front();
+			else {
+				return false;
+			}
 		}
 
 		while (mem_to_allocate-- > 0) {
@@ -425,6 +432,7 @@ public:
 		}
 		screen->memoryAllocated = true;
 		oldest.push_back(screen);
+		return true;
 	}
 
 	bool allocateMemoryPagingFCFS(shared_ptr<Screen> screen) {
