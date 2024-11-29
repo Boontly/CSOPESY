@@ -122,7 +122,10 @@ private:
 			write(string(50, '-'));
 			write("CPU-Util: " + scheduler.getCpuUtilization());
 			write("Memory Usage: " + to_string(scheduler.getUsedMem()) + "/" + to_string(scheduler.getMaxMem()) + " MB");
-			write("Memory-Util: " + to_string(scheduler.getUsedMem() / scheduler.getMaxMem() * 100) + "%");
+			std::stringstream ss;
+			ss << std::fixed << std::setprecision(2)
+				<< (static_cast<double>(scheduler.getUsedMem()) * 100.0 / scheduler.getMaxMem());
+			write("Memory-Util: " + ss.str() + "%");
 			write("");
 			write(string(50, '='));
 			write("Running processes and memory usage:");
