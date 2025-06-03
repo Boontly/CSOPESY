@@ -43,6 +43,7 @@
             },
             "visible": true,
             "shape": "store",
+            "zIndex": 1,
             "ports": {
               "groups": {
                 "top": {
@@ -126,7 +127,6 @@
               ]
             },
             "id": "66c6768a-7b7c-4399-9ad0-6c4d6a753646",
-            "zIndex": 1,
             "data": {
               "type": "tm.Store",
               "name": "SQL Database",
@@ -188,6 +188,7 @@
             },
             "visible": true,
             "shape": "store",
+            "zIndex": 2,
             "ports": {
               "groups": {
                 "top": {
@@ -271,7 +272,6 @@
               ]
             },
             "id": "1910dc19-dcb7-439f-9d75-29b61a327944",
-            "zIndex": 2,
             "data": {
               "type": "tm.Store",
               "name": "LDAP",
@@ -328,6 +328,7 @@
             },
             "visible": true,
             "shape": "process",
+            "zIndex": 3,
             "ports": {
               "groups": {
                 "top": {
@@ -411,7 +412,6 @@
               ]
             },
             "id": "70fcf0b8-1aca-4af2-a032-1e44bff8b0c6",
-            "zIndex": 3,
             "data": {
               "type": "tm.Process",
               "name": "Web \nApplication",
@@ -469,6 +469,7 @@
             },
             "visible": true,
             "shape": "process",
+            "zIndex": 4,
             "ports": {
               "groups": {
                 "top": {
@@ -552,7 +553,6 @@
               ]
             },
             "id": "d907e589-8a2a-4cc8-84dc-200918af8a82",
-            "zIndex": 4,
             "data": {
               "type": "tm.Process",
               "name": "Authorization\nProvider",
@@ -610,6 +610,7 @@
             },
             "visible": true,
             "shape": "actor",
+            "zIndex": 5,
             "ports": {
               "groups": {
                 "top": {
@@ -693,7 +694,6 @@
               ]
             },
             "id": "e6b248a1-925c-4f6c-ab03-dc91732d35e6",
-            "zIndex": 5,
             "data": {
               "type": "tm.Actor",
               "name": "Browser Client",
@@ -1291,6 +1291,7 @@
             "shape": "trust-boundary-curve",
             "width": 200,
             "height": 100,
+            "zIndex": 11,
             "connector": "smooth",
             "data": {
               "type": "tm.Boundary",
@@ -1316,8 +1317,7 @@
                 "x": 3834,
                 "y": 970
               }
-            ],
-            "zIndex": 11
+            ]
           }
         ]
       }
